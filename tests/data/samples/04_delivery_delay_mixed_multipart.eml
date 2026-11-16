@@ -1,0 +1,26 @@
+From: "Piotr Zając" <piotr.zajac@zielonadolina.example>
+To: logistics@northbridge-logistics.example
+Subject: =?UTF-8?B?T3DDs8W6bmllbmllIGRvc3Rhd3kgLyBEZWxpdmVyeSBkZWxheQ==?=
+Date: Wed, 04 Nov 2026 08:00:00 +0100
+Message-ID: <delay-0004@zielonadolina.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="BOUNDARY-ALT-1"
+
+--BOUNDARY-ALT-1
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Cześć team,
+
+Dostawa zamówienia PO-7731 jest opóźniona. The shipment will arrive
+no later than 12 November 2026. Prosimy o potwierdzenie nowego terminu.
+
+Piotr
+
+--BOUNDARY-ALT-1
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+<html><body><p>Cześć team,</p><p>HTML version - should not be preferred.</p></body></html>
+
+--BOUNDARY-ALT-1--

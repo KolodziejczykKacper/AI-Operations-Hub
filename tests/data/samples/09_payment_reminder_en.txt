@@ -1,0 +1,13 @@
+From: Laura Fenwick <laura.fenwick@northbridge-logistics.example>
+To: ar@fabryka-przykladow.example
+Subject: Second payment reminder - INV-5521
+Date: Sun, 08 Nov 2026 09:00:00 +0000
+Message-ID: <reminder-0009@northbridge-logistics.example>
+
+Hi,
+
+This is a second reminder that invoice INV-5521 (USD 3,250.00) remains
+unpaid. A late fee of 2% applies after 20 November 2026.
+
+Thanks,
+Laura
