@@ -56,6 +56,24 @@ def file_engine(file_db_url, settings):
     eng.dispose()
 
 
+def run_analysis(body: str, subject: str | None = None):
+    """Analyze fictional text with the rule-based analyzer (no database)."""
+    from ai_ops_hub.analysis import AnalysisInput, RuleBasedAnalyzer
+
+    return RuleBasedAnalyzer().analyze(AnalysisInput(subject=subject, body_text=body))
+
+
+def values(result, name):
+    """Normalized values of all fields called ``name`` (str or FieldName)."""
+    return [f.value.normalized for f in result.fields if f.name.value == str(name)]
+
+
+def field(result, name):
+    found = [f for f in result.fields if f.name.value == str(name)]
+    assert len(found) == 1, f"expected exactly one {name!r}, got {[f.value.normalized for f in found]}"
+    return found[0]
+
+
 def pasted(body: str = "Please confirm the order.", mid: str | None = "m1@x.example",
            subject: str = "Order", date: str | None = None):
     """Build a ParsedMessage from fictional pasted text."""

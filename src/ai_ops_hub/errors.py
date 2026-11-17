@@ -15,3 +15,15 @@ class InputTooLargeError(AIOpsError):
 
 class MalformedMessageError(AIOpsError):
     """Input could not be interpreted as an email message."""
+
+
+class MessageNotFoundError(AIOpsError):
+    """No stored message has the requested id."""
+
+
+class ConflictNotAnalyzableError(AIOpsError):
+    """Messages imported as conflicts are never analyzed automatically."""
+
+
+class AnalyzerContractError(AIOpsError):
+    """An analyzer returned a result that violates the analyzer contract."""

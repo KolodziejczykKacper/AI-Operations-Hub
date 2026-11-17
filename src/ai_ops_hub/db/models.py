@@ -12,7 +12,17 @@ field types at class creation.
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import CheckConstraint, Column, DateTime, Index, JSON, UniqueConstraint, text
+from sqlalchemy import (
+    DDL,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Index,
+    JSON,
+    UniqueConstraint,
+    event,
+    text,
+)
 from sqlalchemy.types import TypeDecorator
 from sqlmodel import Field, SQLModel
 
@@ -79,6 +89,58 @@ class MessageRecord(SQLModel, table=True):
     import_status: str  # dedup/import state; case-handling status will live on a separate case entity
     conflicts_with_id: int | None = Field(default=None, foreign_key="messages.id")
     imported_at: datetime = Field(sa_column=Column(UTCDateTime, nullable=False))
+
+
+class AnalysisRecord(SQLModel, table=True):
+    """One analysis of one message by one analyzer version.
+
+    Deliberately separate from ``messages`` so that ``import_status`` (dedup
+    state) and any future case-handling status stay independent of analysis.
+    A new analyzer version adds a new row; earlier rows are kept as history.
+    """
+
+    __tablename__ = "analyses"
+    __table_args__ = (
+        UniqueConstraint(
+            "message_id", "analyzer_name", "analyzer_version",
+            name="uq_analyses_message_analyzer_version",
+        ),
+        CheckConstraint("analysis_method IN ('rule_based', 'llm')", name="ck_analyses_method"),
+        CheckConstraint(
+            "category IN ('order', 'complaint', 'inquiry', 'document_request', 'other')",
+            name="ck_analyses_category",
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    message_id: int = Field(foreign_key="messages.id", index=True)
+    analyzer_name: str
+    analyzer_version: str
+    analysis_method: str
+    category: str
+    requires_review: bool
+    result: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    source_fingerprint: str  # messages.content_fingerprint at analysis time
+    created_at: datetime = Field(sa_column=Column(UTCDateTime, nullable=False))
+
+
+# Defence in depth: the service refuses to analyze conflicting imports, and the
+# database refuses the row too. Created together with the table, so existing
+# databases simply gain the new table and trigger (nothing is altered or dropped).
+event.listen(
+    AnalysisRecord.__table__,
+    "after_create",
+    DDL(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_analyses_no_conflict_insert
+        BEFORE INSERT ON analyses
+        WHEN (SELECT import_status FROM messages WHERE id = NEW.message_id) = 'conflict'
+        BEGIN
+            SELECT RAISE(ABORT, 'messages imported as conflicts must not be analyzed');
+        END
+        """
+    ).execute_if(dialect="sqlite"),
+)
 
 
 class AuditEventRecord(SQLModel, table=True):

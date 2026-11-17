@@ -11,7 +11,8 @@ from datetime import datetime
 
 from sqlmodel import Session, col, select
 
-from ai_ops_hub.db.models import AuditEventRecord, MessageRecord
+from ai_ops_hub.analysis.schemas import AnalysisResult
+from ai_ops_hub.db.models import AnalysisRecord, AuditEventRecord, MessageRecord
 from ai_ops_hub.schemas import (
     Actor,
     AuditEventType,
@@ -121,3 +122,67 @@ class AuditRepository:
 
     def count(self) -> int:
         return len(self._s.exec(select(AuditEventRecord.id)).all())
+
+
+class AnalysisRepository:
+    def __init__(self, session: Session) -> None:
+        self._s = session
+
+    def add(
+        self,
+        *,
+        message_id: int,
+        result: AnalysisResult,
+        source_fingerprint: str,
+        created_at: datetime,
+    ) -> AnalysisRecord:
+        record = AnalysisRecord(
+            message_id=message_id,
+            analyzer_name=result.analyzer_name,
+            analyzer_version=result.analyzer_version,
+            analysis_method=result.analysis_method.value,
+            category=result.category.value,
+            requires_review=result.requires_review,
+            result=result.model_dump(mode="json"),
+            source_fingerprint=source_fingerprint,
+            created_at=created_at,
+        )
+        self._s.add(record)
+        self._s.flush()
+        return record
+
+    def get_for(self, message_id: int, analyzer_name: str, analyzer_version: str) -> AnalysisRecord | None:
+        stmt = select(AnalysisRecord).where(
+            AnalysisRecord.message_id == message_id,
+            AnalysisRecord.analyzer_name == analyzer_name,
+            AnalysisRecord.analyzer_version == analyzer_version,
+        )
+        return self._s.exec(stmt).first()
+
+    def list_for_message(self, message_id: int) -> Sequence[AnalysisRecord]:
+        stmt = (
+            select(AnalysisRecord)
+            .where(AnalysisRecord.message_id == message_id)
+            .order_by(col(AnalysisRecord.id))
+        )
+        return self._s.exec(stmt).all()
+
+    def pending_message_ids(self, analyzer_name: str, analyzer_version: str, limit: int) -> list[int]:
+        """Imported (non-conflict) messages this analyzer version has not analyzed yet."""
+        done = select(AnalysisRecord.message_id).where(
+            AnalysisRecord.analyzer_name == analyzer_name,
+            AnalysisRecord.analyzer_version == analyzer_version,
+        )
+        stmt = (
+            select(MessageRecord.id)
+            .where(
+                MessageRecord.import_status == ImportStatus.IMPORTED.value,
+                col(MessageRecord.id).not_in(done),
+            )
+            .order_by(col(MessageRecord.id))
+            .limit(limit)
+        )
+        return list(self._s.exec(stmt).all())
+
+    def count(self) -> int:
+        return len(self._s.exec(select(AnalysisRecord.id)).all())

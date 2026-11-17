@@ -56,17 +56,28 @@ class ValueKind(StrEnum):
     PARTY = "party"
     REFERENCE = "reference"
     OTHER = "other"
+    QUANTITY = "quantity"
+    PRODUCT = "product"
+    EMAIL = "email"
+    PHONE = "phone"
+
+
+class SpanSource(StrEnum):
+    BODY = "body"
+    SUBJECT = "subject"
 
 
 class SourceSpan(BaseModel):
     """Half-open character range [start, end) in ``ParsedMessage.body_text``
-    plus the exact text found there."""
+    (or in the subject when ``source`` is ``subject``) plus the exact text
+    found there."""
 
     model_config = ConfigDict(frozen=True)
 
     start: int = Field(ge=0)
     end: int = Field(gt=0)
     text: str
+    source: SpanSource = SpanSource.BODY
 
     @model_validator(mode="after")
     def _check(self) -> "SourceSpan":
@@ -76,8 +87,9 @@ class SourceSpan(BaseModel):
             raise ValueError("text length must equal end - start")
         return self
 
-    def matches(self, body_text: str) -> bool:
-        return body_text[self.start : self.end] == self.text
+    def matches(self, body_text: str, subject: str | None = None) -> bool:
+        source_text = subject if self.source is SpanSource.SUBJECT else body_text
+        return source_text is not None and source_text[self.start : self.end] == self.text
 
 
 class ExtractedValue(BaseModel):
@@ -90,9 +102,9 @@ class ExtractedValue(BaseModel):
     span: SourceSpan
     method: AnalysisMethod
 
-    def verify_against(self, body_text: str) -> bool:
-        """True when the stored span still matches the source body exactly."""
-        return self.span.matches(body_text)
+    def verify_against(self, body_text: str, subject: str | None = None) -> bool:
+        """True when the stored span still matches the source text exactly."""
+        return self.span.matches(body_text, subject)
 
 
 # --- Deduplication ----------------------------------------------------------
@@ -184,6 +196,7 @@ class Actor(StrEnum):
 
 class AuditEventType(StrEnum):
     MESSAGE_IMPORTED = "message_imported"
+    ANALYSIS_COMPLETED = "analysis_completed"
     CASE_CREATED = "case_created"
     CASE_UPDATED = "case_updated"
     STATUS_CHANGED = "status_changed"

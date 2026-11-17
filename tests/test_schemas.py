@@ -82,3 +82,26 @@ def test_human_can_approve_case():
 
 def test_no_email_sending_event_exists():
     assert not any("send" in t.value or "email" in t.value for t in AuditEventType)
+
+
+# --- Stage 3: backward-compatible provenance extensions --------------------------
+
+from ai_ops_hub.schemas import SpanSource  # noqa: E402
+
+
+def test_span_defaults_to_the_body_so_stage1_usage_is_unchanged():
+    span = SourceSpan(start=0, end=3, text="abc")
+    assert span.source is SpanSource.BODY
+    assert span.matches("abcdef") and not span.matches("xyzdef")
+
+
+def test_subject_spans_are_checked_against_the_subject():
+    span = SourceSpan(start=4, end=7, text="PO-", source=SpanSource.SUBJECT)
+    assert span.matches("body ignored", subject="Re: PO-7731")
+    assert not span.matches("Re: PO-7731")  # no subject supplied: cannot match
+    assert not span.matches("Re: PO-7731", subject="Re: XX-7731")
+
+
+def test_new_value_kinds_exist_and_old_ones_remain():
+    assert {"amount", "date", "deadline", "party", "reference", "other"} <= {k.value for k in ValueKind}
+    assert {"quantity", "product", "email", "phone"} <= {k.value for k in ValueKind}
