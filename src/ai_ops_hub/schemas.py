@@ -199,6 +199,7 @@ class AuditEventType(StrEnum):
     CASE_REJECTED = "case_rejected"
     CASE_REOPENED = "case_reopened"
     CASE_NOTE_ADDED = "case_note_added"
+    ANALYSIS_FAILED = "analysis_failed"  # an optional LLM analysis request failed; nothing was stored
     # Deliberately no "email_sent": the system never sends email.
 
 

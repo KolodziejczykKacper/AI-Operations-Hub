@@ -155,3 +155,27 @@ def open_case(client, text: str = CLEAN_COMPLAINT) -> dict:
     r = client.post(f"/messages/{mid}/analyze")
     assert r.status_code in (200, 201), r.text
     return r.json()["case"]
+
+
+@pytest.fixture(autouse=True)
+def _no_external_network(monkeypatch):
+    """No automated test may reach a non-loopback host (the real Claude API in particular)."""
+    import socket
+
+    real_connect = socket.socket.connect
+    real_getaddrinfo = socket.getaddrinfo
+    local = ("127.0.0.1", "::1", "localhost")
+
+    def guarded_connect(self, address):
+        host = address[0] if isinstance(address, tuple) else address
+        if host not in local:
+            raise RuntimeError(f"network access blocked in tests: {address!r}")
+        return real_connect(self, address)
+
+    def guarded_getaddrinfo(host, *a, **k):
+        if host is not None and host not in local:
+            raise RuntimeError(f"DNS blocked in tests: {host!r}")
+        return real_getaddrinfo(host, *a, **k)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
+    monkeypatch.setattr(socket, "getaddrinfo", guarded_getaddrinfo)

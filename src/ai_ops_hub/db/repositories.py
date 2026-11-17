@@ -19,6 +19,7 @@ from ai_ops_hub.db.models import (
     CaseCorrectionRecord,
     CaseRecord,
     CaseReviewRecord,
+    LlmCallRecord,
     MessageRecord,
 )
 from ai_ops_hub.schemas import (
@@ -183,6 +184,14 @@ class AnalysisRepository:
         )
         return self._s.exec(stmt).first()
 
+    def latest_for_message_by_method(self, message_id: int, method: str) -> AnalysisRecord | None:
+        stmt = (
+            select(AnalysisRecord)
+            .where(AnalysisRecord.message_id == message_id, AnalysisRecord.analysis_method == method)
+            .order_by(col(AnalysisRecord.id).desc())
+        )
+        return self._s.exec(stmt).first()
+
     def get(self, analysis_id: int) -> AnalysisRecord | None:
         return self._s.get(AnalysisRecord, analysis_id)
 
@@ -297,6 +306,45 @@ class CaseRepository:
             .order_by(col(CaseReviewRecord.id))
         )
         return self._s.exec(stmt).all()
+
+
+class LlmCallRepository:
+    """Usage records of optional LLM requests (tokens, cost, latency; never content)."""
+
+    def __init__(self, session: Session) -> None:
+        self._s = session
+
+    def add(self, record: LlmCallRecord) -> LlmCallRecord:
+        self._s.add(record)
+        self._s.flush()
+        return record
+
+    def spent_since(self, since: datetime) -> float:
+        """Conservative local spend: the actual cost when known, else the worst-case estimate."""
+        stmt = select(
+            func.coalesce(func.sum(func.coalesce(LlmCallRecord.actual_cost_usd, LlmCallRecord.estimated_max_cost_usd)), 0.0)
+        ).where(col(LlmCallRecord.created_at) >= since)
+        return float(self._s.exec(stmt).one())
+
+    def get(self, call_id: int) -> LlmCallRecord | None:
+        return self._s.get(LlmCallRecord, call_id)
+
+    def in_flight(self, message_id: int, model: str, since: datetime) -> bool:
+        stmt = select(LlmCallRecord.id).where(
+            LlmCallRecord.message_id == message_id,
+            LlmCallRecord.model == model,
+            LlmCallRecord.status == "reserved",
+            col(LlmCallRecord.created_at) >= since,
+        )
+        return self._s.exec(stmt).first() is not None
+
+    def for_message(self, message_id: int) -> Sequence[LlmCallRecord]:
+        stmt = select(LlmCallRecord).where(LlmCallRecord.message_id == message_id).order_by(col(LlmCallRecord.id))
+        return self._s.exec(stmt).all()
+
+    def for_analysis(self, analysis_id: int) -> LlmCallRecord | None:
+        stmt = select(LlmCallRecord).where(LlmCallRecord.analysis_id == analysis_id)
+        return self._s.exec(stmt).first()
 
 
 class ExportRepository:

@@ -215,6 +215,8 @@ class ExportService:
             ),
             unconfirmed=_unconfirmed(fields),
             corrections=_corrections(result, category, category_corrected, fields),
+            analysis_method=analysis.analysis_method,
+            analyzer_version=analysis.analyzer_version,
         )
 
 

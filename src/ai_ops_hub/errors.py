@@ -96,3 +96,59 @@ class ExportDatabaseError(ExportError):
 
 class ExportGenerationError(ExportError):
     """The workbook could not be generated."""
+
+
+class ClaudeError(AIOpsError):
+    """Base class for optional Claude API analysis failures. Nothing is stored for a failed request."""
+
+
+class ClaudeDisabledError(ClaudeError):
+    """Claude API analysis is switched off (the default)."""
+
+
+class ClaudeNotConfiguredError(ClaudeError):
+    """Claude analysis is enabled but no API key is available."""
+
+
+class ClaudeConsentRequiredError(ClaudeError):
+    """The explicit consent for this request is missing or does not match the preview."""
+
+
+class ClaudeInputTooLargeError(ClaudeError):
+    """The message is larger than the configured limit for Claude analysis."""
+
+
+class ClaudeCostGuardError(ClaudeError):
+    """The estimated cost exceeds the per-request or daily guard."""
+
+
+class ClaudeProviderError(ClaudeError):
+    """The provider call failed (network, server error)."""
+
+    def __init__(self, message: str, *, billed_input_tokens: int | None = None) -> None:
+        super().__init__(message)
+        self.billed_input_tokens = billed_input_tokens
+
+
+class ClaudeTimeoutError(ClaudeProviderError):
+    """The provider did not answer in time."""
+
+
+class ClaudeRateLimitedError(ClaudeProviderError):
+    """The provider rate-limited the request (HTTP 429)."""
+
+
+class ClaudeAuthError(ClaudeProviderError):
+    """The provider rejected the API key."""
+
+
+class ClaudeBadResponseError(ClaudeProviderError):
+    """The answer was truncated, refused, malformed or did not match the schema."""
+
+
+class AnalysisNotFoundError(AIOpsError):
+    """The requested analysis does not exist for this message."""
+
+
+class ClaudeInProgressError(ClaudeError):
+    """An identical Claude request for this message is already running; it is not sent twice."""

@@ -194,13 +194,14 @@ def _source_text(d: m.CaseDetail, span: m.Span | None) -> str:
 def _field_table(d: m.CaseDetail) -> pd.DataFrame:
     msgs = {(f.name, f.value.normalized): [w.message or w.code for w in f.warnings] for f in d.analysis.result.fields}
     rows: list[dict[str, str]] = []
+    col_analysis = analysis_column(d)
     for f in d.fields:
         name = label(FIELD_LABELS, f.name)
         if f.corrected:
             human = "; ".join(v.value for v in f.values) or "(człowiek: brak wartości)"
             rows.append({
                 "Pole": name,
-                "Wartość z analizy (rule_based)": "; ".join(f.analyzer_values) or "—",
+                col_analysis: "; ".join(f.analyzer_values) or "—",
                 "Poprawka człowieka": human,
                 "Obowiązuje": "; ".join(v.value for v in f.values) or "—",
                 "Status": "✅ wpisane przez człowieka",
@@ -211,7 +212,7 @@ def _field_table(d: m.CaseDetail) -> pd.DataFrame:
         for v in f.values:
             rows.append({
                 "Pole": name,
-                "Wartość z analizy (rule_based)": v.value,
+                col_analysis: v.value,
                 "Poprawka człowieka": "—",
                 "Obowiązuje": v.value,
                 "Status": label(VALIDITY_LABELS, v.status),
@@ -246,14 +247,26 @@ def _tab_original(d: m.CaseDetail) -> None:
                 st.text(w)
 
 
+def analysis_column(d: m.CaseDetail) -> str:
+    """Header of the 'value from the analysis' column: names the REAL method."""
+    return "Wartość z analizy (Claude, llm)" if d.analysis.analysis_method == "llm" else "Wartość z analizy (rule_based)"
+
+
 def _tab_analysis(client: ApiClient, d: m.CaseDetail, view: dict) -> None:
     a = d.analysis
     st.markdown("#### Wyniki analizy automatycznej")
-    st.info(
-        f"Metoda: **{esc(a.analysis_method)}** ({esc(a.analyzer_name)} {esc(a.analyzer_version)}), "
-        "czyli dopasowywanie wzorców według reguł. To **nie jest** model AI i nie rozumie tekstu. "
-        "Wyniki to sugestie do sprawdzenia."
-    )
+    if a.analysis_method == "llm":
+        st.info(
+            f"Metoda: **llm: Claude API** ({esc(a.analyzer_name)} {esc(a.analyzer_version)}). To model językowy, "
+            "nie reguły. Każda wartość została lokalnie sprawdzona względem tekstu e-maila, ale model może się mylić. "
+            "Wyniki to sugestie do sprawdzenia przez człowieka."
+        )
+    else:
+        st.info(
+            f"Metoda: **{esc(a.analysis_method)}** ({esc(a.analyzer_name)} {esc(a.analyzer_version)}), "
+            "czyli dopasowywanie wzorców według reguł. To **nie jest** model AI i nie rozumie tekstu. "
+            "Wyniki to sugestie do sprawdzenia."
+        )
     cat_line = (
         f"Kategoria: analizator → {label(CATEGORY_LABELS, d.analyzer_category)}"
         f"  ·  obowiązująca → {label(CATEGORY_LABELS, d.effective_category)}"
@@ -366,7 +379,11 @@ def _tab_history(client: ApiClient, d: m.CaseDetail) -> None:
         {
             "Nr": e.id,
             "Czas": fmt_dt(e.timestamp),
-            "Zdarzenie": label(EVENT_LABELS, e.event_type),
+            "Zdarzenie": (
+                "Analiza wykonana (Claude, llm)"
+                if e.event_type == "analysis_completed" and e.details.get("analysis_method") == "llm"
+                else label(EVENT_LABELS, e.event_type)
+            ),
             "Aktor": e.actor + (f" ({e.details['reviewer']})" if e.details.get("reviewer") else ""),
             "Szczegóły": clip(json.dumps(e.details, ensure_ascii=False), 140),
         } for e in audit
@@ -507,8 +524,12 @@ def render(client: ApiClient) -> None:
     m2.metric("Wersja", case.version)
     m3.metric("Kategoria", label(CATEGORY_LABELS, detail.effective_category))
     m4.metric("Metoda analizy", detail.analysis.analysis_method)
-    st.caption("Analiza regułowa (rule_based): dopasowanie wzorców, nie model AI. "
-               f"Recenzent: {esc(detail.reviewer_label)} (etykieta, bez uwierzytelniania).")
+    if detail.analysis.analysis_method == "llm":
+        st.caption("Analiza modelem Claude (llm), sprawdzona lokalnie; wymaga decyzji człowieka. "
+                   f"Recenzent: {esc(detail.reviewer_label)} (etykieta, bez uwierzytelniania).")
+    else:
+        st.caption("Analiza regułowa (rule_based): dopasowanie wzorców, nie model AI. "
+                   f"Recenzent: {esc(detail.reviewer_label)} (etykieta, bez uwierzytelniania).")
 
     _flash()
     if view["version"] != case.version:

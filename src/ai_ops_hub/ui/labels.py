@@ -56,6 +56,7 @@ EVENT_LABELS = {
     "case_approved": "ZATWIERDZONY",
     "case_rejected": "ODRZUCONY",
     "case_reopened": "Otwarty ponownie",
+    "analysis_failed": "Analiza Claude nie powiodła się (nic nie zapisano)",
 }
 ACTION_LABELS = {
     "note": "notatka",

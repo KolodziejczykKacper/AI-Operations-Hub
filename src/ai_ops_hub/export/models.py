@@ -54,6 +54,8 @@ class ExportRow:
     overridden_problems: tuple[str, ...]
     unconfirmed: tuple[str, ...]
     corrections: tuple[str, ...]
+    analysis_method: str = "rule_based"  # how the analysis behind this case was produced
+    analyzer_version: str = ""
 
 
 @dataclass(frozen=True)

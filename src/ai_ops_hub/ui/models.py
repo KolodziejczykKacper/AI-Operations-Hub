@@ -236,3 +236,99 @@ class ExportFile(_M):
     filename: str
     case_count: int
     skipped_count: int = 0
+
+
+class ClaudeStatus(_M):
+    enabled: bool
+    key_configured: bool
+    model: str
+    model_has_known_price: bool = False
+    input_usd_per_mtok: float | None = None
+    output_usd_per_mtok: float | None = None
+    prices_verified_on: str = ""
+    max_output_tokens: int = 0
+    max_input_chars: int = 0
+    max_cost_usd_per_request: float = 0.0
+    daily_budget_usd: float = 0.0
+    spent_last_24h_usd: float = 0.0
+    can_analyze: bool
+    blocked_reason: str | None = None
+    privacy_warning: str = ""
+    cost_disclaimer: str = ""
+
+
+class ClaudePreview(_M):
+    message_id: int
+    enabled: bool
+    key_configured: bool
+    model: str
+    content_fingerprint: str
+    will_send: list[str] = Field(default_factory=list)
+    not_sent: list[str] = Field(default_factory=list)
+    subject_chars: int
+    body_chars: int
+    estimated_input_tokens: int
+    max_output_tokens: int
+    estimated_max_cost_usd: float
+    already_analyzed: bool
+    existing_analysis_id: int | None = None
+    can_send: bool
+    blocked_reason: str | None = None
+    privacy_warning: str = ""
+    cost_disclaimer: str = ""
+
+
+class LlmUsage(_M):
+    id: int
+    message_id: int
+    analysis_id: int | None = None
+    model: str
+    status: str
+    error_type: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    estimated_max_cost_usd: float
+    actual_cost_usd: float | None = None
+    latency_ms: int | None = None
+    request_id: str | None = None
+    values_proposed: int = 0
+    values_rejected: int = 0
+
+
+class ClaudeAnalyzeResult(_M):
+    created: bool
+    analysis: Analysis
+    usage: LlmUsage | None = None
+    case_id: int | None = None
+    note: str = ""
+
+
+class FieldDiff(_M):
+    name: str
+    verdict: str  # same | different | only_a | only_b
+    values_a: list[str] = Field(default_factory=list)
+    values_b: list[str] = Field(default_factory=list)
+    statuses_a: list[str] = Field(default_factory=list)
+    statuses_b: list[str] = Field(default_factory=list)
+
+
+class Comparison(_M):
+    message_id: int
+    analysis_a_id: int
+    analysis_b_id: int
+    method_a: str
+    method_b: str
+    version_a: str
+    version_b: str
+    category_a: str
+    category_b: str
+    category_match: bool
+    requires_review_a: bool
+    requires_review_b: bool
+    warning_count_a: int
+    warning_count_b: int
+    fields: list[FieldDiff] = Field(default_factory=list)
+    same: int
+    different: int
+    only_a: int
+    only_b: int

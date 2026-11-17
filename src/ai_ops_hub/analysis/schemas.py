@@ -72,6 +72,10 @@ class WarningCode(StrEnum):
     NO_COUNTRY_CODE = "no_country_code"
     EMAIL_INVALID = "email_invalid"
     POSSIBLE_PROMPT_INJECTION = "possible_prompt_injection"
+    LLM_VALUE_REJECTED = "llm_value_rejected"  # a model value not supported by the source text was dropped
+    LLM_FORMAT_INVALID = "llm_format_invalid"  # a model value has an invalid format
+    LLM_SPAN_AMBIGUOUS = "llm_span_ambiguous"  # the quote occurs more than once; which one is meant is not determined
+    LLM_MODEL_NOTE = "llm_model_note"  # the model explained why a value is ambiguous
 
 
 class ReviewCode(StrEnum):

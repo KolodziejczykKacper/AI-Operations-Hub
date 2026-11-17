@@ -345,6 +345,120 @@ shapes the HTTP response.
 * Tested with `openpyxl` and (manually) the Streamlit UI; the file was not opened in Microsoft Excel itself
   in the automated tests.
 
+## Stage 7: optional Claude API analysis
+
+Two analyzers can look at the same email, and **you choose explicitly**:
+
+| | `rule_based` (default) | Claude API (`llm`, optional) |
+|---|---|---|
+| how | deterministic patterns, offline | a language model through the official Anthropic SDK |
+| cost | free | **paid**, per request |
+| data leaves your computer | never | **yes: subject and body go to Anthropic** |
+| when it runs | import + analyze button | **only** after a per-request explicit consent |
+| stored as | `analyses` row, method `rule_based` | separate `analyses` row, method `llm`, version `<prompt>/<model>` |
+
+Claude is **disabled by default and never called automatically**: not on import, not on page refresh,
+not by the normal analyze endpoint, and not by the benchmark unless you authorize spending.
+
+### Enable it (optional)
+1. Create an API key in the Anthropic Console and **set a billing / spend limit there** (the local guards below
+   are estimates, not a guaranteed spending limit).
+2. Put the key and the switch in the environment or in the local, Git-ignored `.env` file (never in code):
+   ```
+   AIOPS_CLAUDE_ENABLED=true
+   ANTHROPIC_API_KEY=sk-ant-...your key...
+   ```
+   Optional: `AIOPS_CLAUDE_MODEL` (default `claude-haiku-5-5`, the cheapest; `claude-sonnet-5-5` and `claude-opus-5-5` also have
+   known prices), `AIOPS_CLAUDE_MAX_OUTPUT_TOKENS` (4000), `AIOPS_CLAUDE_MAX_INPUT_CHARS` (20000),
+   `AIOPS_CLAUDE_MAX_COST_USD_PER_REQUEST` (0.02), `AIOPS_CLAUDE_DAILY_BUDGET_USD` (0.25), `AIOPS_CLAUDE_TIMEOUT_SECONDS` (30).
+3. Restart the backend. The Streamlit screen **Analiza Claude** shows the status (never the key).
+
+**Offline mode** is simply not enabling it: everything else, including comparison of existing analyses, keeps working.
+
+### What is sent, and what it costs
+* Sent: the **subject and body** of ONE email, plus fixed instructions and the JSON schema (about 1.5K input tokens).
+  **Not** sent: sender address, recipients, headers, other emails, your database. No tools, no web search, no
+  files, no streaming. Do not use real, personal or confidential emails for demos.
+* Prices (USD per 1M tokens, verified 2026-11-17 at platform.claude.com/docs/en/about-claude/pricing; they can change):
+  Haiku 5.5 $0.10 in / $0.50 out (above 100K prompt tokens $0.50 / $2.50), Sonnet 5.5 $2 / $10, Opus 5.5 $4 / $20.
+  A typical email costs about $0.0003 with Haiku, $0.006 with Sonnet, $0.012 with Opus.
+* Before each request the screen shows the model, the estimated tokens and a **worst-case cost** (input estimate plus the whole
+  output cap). After it, the **actual** cost computed from the tokens the API returned. Local estimates are NOT a billing record.
+
+### Consent and cost controls
+* `GET /messages/{id}/claude/preview` (local, free, no network), then `POST /messages/{id}/claude/analyze` with
+  `{"confirm_send_to_anthropic": true, "model": "<the previewed model>", "accepted_max_cost_usd": <at least the estimate>}`.
+  Wrong or missing consent: 422, nothing sent. In Streamlit: tick the consent box, then click the paid button; the box is
+  new (unticked) after every click, and reruns never send.
+* Checks in order, all BEFORE any network call: enabled, key present, model has a known price, message exists and is not a
+  conflicting import, **already analysed -> returns the stored analysis and sends nothing**, input size, per-request cost
+  guard, an early look at the 24-hour budget, consent, and finally the **atomic reservation** (next bullet).
+* **The consent is bound to exactly this request:** the `message_id`, the content fingerprint of the exact text you saw in the
+  preview, the model and an accepted cost at least equal to the worst-case estimate. Change any of them and the request is refused
+  (422) until you fetch a new preview.
+* **Budget reservation:** before anything is sent, one `BEGIN IMMEDIATE` transaction re-reads the 24-hour spend (running requests
+  included) and inserts a `reserved` usage row holding the worst-case estimate, so two concurrent requests cannot both spend the same
+  remaining amount. The row is settled in place (`ok`/`failed`, actual cost from usage). The same step refuses (409
+  `claude_in_progress`) a second identical request for a message while the first one is running. A crashed request stays
+  `reserved`: it keeps counting for 24 hours, so the guard errs on the safe side. **This is a local guard, not a guaranteed spending
+  limit on your Anthropic bill.**
+* The SDK client is built with `max_retries=0` and a timeout: a paid request is **never repeated automatically**; a failed one
+  can only be repeated by a new explicit consent. Billing for failed or truncated answers is possible; the usage is recorded.
+
+### Safe structured extraction
+* Schema-constrained JSON (`output_config.format`). The email is untrusted DATA between tags; the system prompt forbids following
+  instructions in it; the request has no tools, so the model has nothing to trigger. The answer can only add values to ONE
+  analysis: it can not approve, create a case, write files or call anything.
+* The model returns the category and, for each field, a verbatim **quote**, the normalized value and a status. **Offsets are computed
+  locally** by finding the quote in the original text, so spans cannot be hallucinated, and every span is verified.
+* Where the span goes: offsets are found locally; see the limitation about repeated quotes below.
+* A value is **rejected** (a `llm_value_rejected` warning) when the quote is not in the text, when the normalized value is not
+  supported by the quote (different digits, a currency or year the text does not state, rewritten names), or when it sits inside
+  instruction-like text. A year that is not written becomes `--MM-DD` and `ambiguous`; a currency that is not written is not assumed.
+  The model's status can only be lowered by local checks. Review reasons and prompt-injection detection are computed locally with the
+  same rules as for `rule_based`.
+
+### Persistence, cases and comparison
+* A Claude result is a **separate, versioned analysis** (`analysis_method = llm`; another model or prompt version is another row).
+  Existing analyses, corrections and approved/rejected cases are never changed. The new table `llm_calls` (additive; created on start)
+  stores tokens, cost, latency, request id and counters, **never prompts, answers or email text**. Success writes an audit event
+  (`analysis_completed`, actor `human`); a failure writes `analysis_failed` and no analysis.
+* **An existing case keeps its analysis.** Adopting another analysis for an open case would need history changes, so Stage 7 offers
+  only a **read-only comparison** (`GET /messages/{id}/compare`, screen *Analiza Claude*).
+* For a message **without a case** you can create the case from the analysis you choose: `POST /messages/{id}/case` with
+  `{"analysis_id": ...}` (409 if a case already exists). Without an explicit choice a new case always reviews the latest `rule_based`
+  analysis, never a Claude one. A case reviewing a Claude analysis is labelled `llm` everywhere (detail screen, audit, Excel
+  column *Metoda analizy*).
+* Conflicting imports are never analysed, by either analyzer.
+
+### Evaluation (offline by default)
+`python -m ai_ops_hub.analysis.claude.benchmark tests/data/eval/dataset_v1.jsonl` prints the `rule_based` baseline and a price
+estimate (no network). `--simulate faithful|noisy` runs the real Claude pipeline against a fake provider: it checks the verification
+layer (false rejections, caught fabrications) and says **nothing about Claude's quality**. Datasets are never pooled: the dev set
+(`dataset_v1`), the `challenge` set and the `holdout` set are separate runs; do not tune on holdout. Live runs (`--live`) are refused
+unless Claude is enabled, a key is set, `AIOPS_BENCHMARK_LIVE_AUTHORIZED=yes-i-authorize-spending` is set,
+`--authorize-spending-usd` covers the worst-case estimate, and the holdout set additionally needs `--allow-holdout`.
+
+### One authorized low-cost live test (only when YOU decide)
+1. Set a spend limit in the Anthropic Console. Put `AIOPS_CLAUDE_ENABLED=true` and `ANTHROPIC_API_KEY` in `.env`.
+2. Start the backend and the UI. Import ONE fictional email (the example in `docs/DEMO_PL.md`) and run the `rule_based` analysis.
+3. Open **Analiza Claude**, check the preview (about $0.002 worst case with Haiku), tick the consent box, click the paid button once.
+4. Read the actual cost and the comparison; the Anthropic Console shows the real charge.
+5. Optional: `set AIOPS_BENCHMARK_LIVE_AUTHORIZED=yes-i-authorize-spending` and
+   `.venv\Scripts\python -m ai_ops_hub.analysis.claude.benchmark tests\data\eval\dataset_challenge_v1.jsonl --live --max-cases 5 --authorize-spending-usd 0.05`.
+
+### Stage 7 limitations
+* The local token estimate is pessimistic but approximate; thinking tokens, price changes or SDK behavior can make real costs differ.
+  There is no hard spending limit in this code: use the Console limit.
+* **No real API request was made while developing this stage.** The prompt, the exact `output_config` combination (`effort` with
+  `format`) and the real model's quality are untested against the real API until your authorized test.
+* If the quoted text of an **amount, quantity or date** occurs more than once (in one source, or in the subject AND the body), the
+  field is kept at its first occurrence but marked `ambiguous` with a `llm_span_ambiguous` warning, because each occurrence may
+  have a different business role. Repeated names, references, e-mails and phones are the same value and are not flagged.
+* Claude may miss fields or choose another category than `rule_based`; the comparison shows it, a human decides.
+* No authentication and no per-user budgets; the daily budget is a local sum over recorded estimates.
+* Only the three listed models have known prices; others are refused.
+
 ## Setup and tests
 ```
 python -m venv .venv

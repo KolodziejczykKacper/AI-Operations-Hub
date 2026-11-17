@@ -303,3 +303,36 @@ for _table in (CaseCorrectionRecord.__table__, CaseReviewRecord.__table__):
                 """
             ).execute_if(dialect="sqlite"),
         )
+
+
+# --- Optional LLM analysis usage (Stage 7; additive: one new table) ------------------------
+
+
+class LlmCallRecord(SQLModel, table=True):
+    """One paid (or attempted) Claude request. Stores NO prompt and NO model text.
+
+    ``status`` is ``reserved`` while the request runs (its worst-case estimate already counts against the
+    local daily budget), then ``ok`` or ``failed``.
+    ``estimated_max_cost_usd`` is the local worst-case estimate shown before the request;
+    ``actual_cost_usd`` is computed from the token usage the API returned (NULL if none).
+    Neither is a billing record: the Anthropic Console is the source of truth.
+    """
+
+    __tablename__ = "llm_calls"
+    __table_args__ = (CheckConstraint("status IN ('reserved', 'ok', 'failed')", name="ck_llm_calls_status"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    message_id: int = Field(foreign_key="messages.id", index=True)
+    analysis_id: int | None = Field(default=None, foreign_key="analyses.id")
+    model: str
+    status: str
+    error_type: str | None = Field(default=None)
+    input_tokens: int | None = Field(default=None)
+    output_tokens: int | None = Field(default=None)
+    estimated_max_cost_usd: float
+    actual_cost_usd: float | None = Field(default=None)
+    latency_ms: int | None = Field(default=None)
+    request_id: str | None = Field(default=None)
+    values_proposed: int = Field(default=0)
+    values_rejected: int = Field(default=0)
+    created_at: datetime = Field(sa_column=Column(UTCDateTime, nullable=False))

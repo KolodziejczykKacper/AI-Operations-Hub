@@ -103,6 +103,9 @@ def _check_shape(target: str, v: str) -> str | None:
     return None
 
 
+check_value_shape = _check_shape  # public alias: the shape rules for normalized values
+
+
 def effective_category(result: AnalysisResult, latest: dict[str, list[str]]) -> tuple[Category, bool]:
     if CATEGORY_TARGET in latest:
         return Category(latest[CATEGORY_TARGET][0]), True

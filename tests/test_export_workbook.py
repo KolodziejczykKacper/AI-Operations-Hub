@@ -9,6 +9,7 @@ from io import BytesIO
 
 import pytest
 from export_helpers import open_xlsx
+from openpyxl.utils import get_column_letter
 
 from ai_ops_hub.export.models import ExportRow, ExportValue
 from ai_ops_hub.export.workbook import COLUMNS, DATA_SHEET, HEADERS, INFO_SHEET, build_workbook
@@ -20,7 +21,7 @@ EXPECTED_HEADERS = (
     "Termin realizacji", "Żądana data", "Numer referencyjny", "Osoba kontaktowa", "Organizacja",
     "E-mail", "Telefon", "Notatka przy zatwierdzeniu", "Pozostałe notatki", "Zatwierdzono mimo problemów",
     "Uzasadnienie (override)", "Zastąpione problemy", "Pola do weryfikacji (niepotwierdzone)",
-    "Poprawki człowieka", "Wersja przypadku",
+    "Poprawki człowieka", "Wersja przypadku", "Metoda analizy",
 )
 
 
@@ -71,9 +72,9 @@ def test_two_sheets_data_and_information():
 def test_header_row_is_frozen_filtered_styled_and_columns_have_widths():
     ws = open_xlsx(build([make_row(1), make_row(2)]))[DATA_SHEET]
     assert ws.freeze_panes == "A2"
-    assert ws.auto_filter.ref == "A1:Z3"
+    assert ws.auto_filter.ref == "A1:AA3"
     assert ws["A1"].font.bold and ws["A1"].fill.fgColor.rgb.endswith("1F3864")
-    assert all((ws.column_dimensions[chr(65 + i)].width or 0) >= 10 for i in range(26))
+    assert all((ws.column_dimensions[get_column_letter(i)].width or 0) >= 10 for i in range(1, 28))
     assert ws.print_title_rows == "$1:$1"
 
 
@@ -178,7 +179,7 @@ def test_information_sheet_describes_the_export_honestly():
 
 def test_an_empty_row_list_still_makes_a_valid_workbook():
     ws = open_xlsx(build([]))[DATA_SHEET]
-    assert ws.max_row == 1 and ws.auto_filter.ref == "A1:Z1"
+    assert ws.max_row == 1 and ws.auto_filter.ref == "A1:AA1"
 
 
 def test_same_input_gives_the_same_cells():

@@ -16,7 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ai_ops_hub.analysis import RuleBasedAnalyzer
 from ai_ops_hub.analysis.base import Analyzer
-from ai_ops_hub.api import routes_cases, routes_exports, routes_messages
+from ai_ops_hub.api import routes_cases, routes_claude, routes_exports, routes_messages
 from ai_ops_hub.api.deps import Services, ServicesDep
 from ai_ops_hub.api.errors import install_error_handlers
 from ai_ops_hub.api.limits import BodySizeLimitMiddleware
@@ -24,7 +24,9 @@ from ai_ops_hub.api.schemas import Health
 from ai_ops_hub.config import Settings, get_settings
 from ai_ops_hub.db.engine import create_db_engine, init_db
 from ai_ops_hub.services.analysis_service import AnalysisService
+from ai_ops_hub.analysis.claude.analyzer import make_client
 from ai_ops_hub.services.case_service import CaseService
+from ai_ops_hub.services.claude_service import ClaudeClientFactory, ClaudeService
 from ai_ops_hub.services.export_service import ExportService
 from ai_ops_hub.services.import_service import ImportService, utc_now
 
@@ -46,6 +48,7 @@ def create_app(
     engine: Engine | None = None,
     analyzer: Analyzer | None = None,
     clock: Callable[[], datetime] = utc_now,
+    claude_client_factory: ClaudeClientFactory = make_client,
 ) -> FastAPI:
     settings = settings or get_settings()
     owns_engine = engine is None
@@ -60,6 +63,7 @@ def create_app(
         analysis=AnalysisService(engine, analyzer or RuleBasedAnalyzer(), clock),
         cases=CaseService(engine, clock),
         exports=ExportService(engine, clock),
+        claude=ClaudeService(engine, settings, clock, claude_client_factory),
     )
 
     @asynccontextmanager
@@ -90,4 +94,5 @@ def create_app(
     app.include_router(routes_messages.router)
     app.include_router(routes_cases.router)
     app.include_router(routes_exports.router)
+    app.include_router(routes_claude.router)
     return app

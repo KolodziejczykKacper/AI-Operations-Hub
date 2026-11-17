@@ -50,6 +50,18 @@ DOMAIN_ERRORS: dict[type[Exception], tuple[int, str]] = {
     E.InvalidExportFilterError: (422, "invalid_export_filter"),
     E.ExportDatabaseError: (503, "export_database_error"),
     E.ExportGenerationError: (500, "export_generation_failed"),
+    E.AnalysisNotFoundError: (404, "analysis_not_found"),
+    E.ClaudeDisabledError: (409, "claude_disabled"),
+    E.ClaudeNotConfiguredError: (409, "claude_not_configured"),
+    E.ClaudeConsentRequiredError: (422, "claude_consent_required"),
+    E.ClaudeInputTooLargeError: (413, "claude_input_too_large"),
+    E.ClaudeCostGuardError: (422, "claude_cost_guard"),
+    E.ClaudeInProgressError: (409, "claude_in_progress"),
+    E.ClaudeTimeoutError: (504, "claude_timeout"),
+    E.ClaudeRateLimitedError: (429, "claude_rate_limited"),
+    E.ClaudeAuthError: (502, "claude_auth_failed"),
+    E.ClaudeBadResponseError: (502, "claude_bad_response"),
+    E.ClaudeProviderError: (502, "claude_provider_error"),
 }
 
 

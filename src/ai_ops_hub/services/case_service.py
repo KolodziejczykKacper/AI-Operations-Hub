@@ -66,7 +66,7 @@ from ai_ops_hub.errors import (
     MessageNotFoundError,
     VersionConflictError,
 )
-from ai_ops_hub.schemas import Actor, AuditEntry, AuditEventType, ImportStatus, MessageDetail
+from ai_ops_hub.schemas import Actor, AnalysisMethod, AuditEntry, AuditEventType, ImportStatus, MessageDetail
 from ai_ops_hub.services.analysis_service import _stored as _stored_analysis
 from ai_ops_hub.services.import_service import utc_now
 
@@ -115,8 +115,13 @@ class CaseService:
 
     # --- creation -----------------------------------------------------------
 
-    def ensure_case(self, message_id: int) -> tuple[CaseSummary, bool]:
-        """Return the message's case, creating it (open, never decided) on first use."""
+    def ensure_case(self, message_id: int, analysis_id: int | None = None) -> tuple[CaseSummary, bool]:
+        """Return the message's case, creating it (open, never decided) on first use.
+
+        A new case reviews ``analysis_id`` when the caller chooses one explicitly; otherwise it
+        reviews the latest RULE-BASED analysis. An optional LLM analysis is never adopted
+        implicitly, and an existing case keeps the analysis it was created with.
+        """
         with Session(self._write_engine, expire_on_commit=False) as session:
             messages, cases = MessageRepository(session), CaseRepository(session)
             msg = messages.get(message_id)
@@ -130,7 +135,13 @@ class CaseService:
             if existing is not None:
                 return self._summary(session, existing), False
 
-            analysis = AnalysisRepository(session).latest_for_message(message_id)
+            analyses = AnalysisRepository(session)
+            if analysis_id is not None:
+                analysis = analyses.get(analysis_id)
+                if analysis is None or analysis.message_id != message_id:
+                    raise CaseNotAvailableError(f"analysis {analysis_id} does not belong to message {message_id}")
+            else:
+                analysis = analyses.latest_for_message_by_method(message_id, AnalysisMethod.RULE_BASED.value)
             if analysis is None:
                 raise CaseNotAvailableError(f"message {message_id} has not been analyzed yet")
 
@@ -164,6 +175,7 @@ class CaseService:
                     "analyzer_version": analysis.analyzer_version,
                     "initial_status": status.value,
                     "analyzer_category": analysis.category,
+                    "analysis_method": analysis.analysis_method,
                     "problem_codes": [p.code for p in probe.problems],
                     "note": "a case is only a review workflow; it is never created approved",
                 },

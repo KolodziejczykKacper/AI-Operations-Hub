@@ -162,6 +162,54 @@ zakresu dat). Plik jest kopią z chwili wygenerowania: późniejsze zmiany w apl
 wygenerowania. Eksport nie zapisuje zdarzenia w dzienniku audytu (serwer nie wie, czy plik został
 pobrany). Brak logowania: eksportować może każdy, kto otworzy stronę.
 
+## 7. Przykład E: opcjonalna analiza Claude i porównanie (Etap 7)
+
+Domyślnie aplikacja działa **offline** (`rule_based`) i nic nie wysyła. Analiza modelem Claude jest **wyłączona**,
+płatna i uruchamiana wyłącznie jawnie. Nigdy nie dzieje się to przy imporcie, odświeżeniu strony ani zwykłej analizie.
+
+**E1. Tryb offline (bez konfiguracji).** Ekran **Analiza Claude** pokaże, że funkcja jest wyłączona i jak ją włączyć.
+Porównanie istniejących analiz działa bez klucza. Przykłady A–D działają jak dotychczas.
+
+**E2. Włączenie (opcjonalnie).** Najpierw ustaw **limit wydatków w koncie Anthropic** (lokalne limity to tylko
+szacunki). W pliku `.env` w katalogu projektu (jest ignorowany przez Git) wpisz:
+
+```
+AIOPS_CLAUDE_ENABLED=true
+ANTHROPIC_API_KEY=sk-ant-...twój klucz...
+```
+
+Nigdy nie wpisuj klucza do kodu ani do czatu. Uruchom ponownie backend. Domyślny model to najtańszy `claude-haiku-5-5`.
+
+**E3. Co jest wysyłane i ile to kosztuje.** Wysyłany jest **temat i treść jednego e-maila** (bez adresu nadawcy,
+odbiorców i nagłówków) do Anthropic. Używaj wyłącznie fikcyjnych maili. Typowy mail to około 0,0003 USD (Haiku),
+0,006 USD (Sonnet) lub 0,012 USD (Opus). Przed wysłaniem zobaczysz model, szacowane tokeny i **maksymalny** koszt;
+po wysłaniu rzeczywisty koszt wyliczony z użycia zwróconego przez API (to nie rachunek: źródłem prawdy jest konto Anthropic).
+
+**E4. Analiza za zgodą.** Ekran **Analiza Claude**, numer wiadomości (zaimportowanej, najlepiej już przeanalizowanej regułowo),
+przeczytaj podgląd i ostrzeżenie, zaznacz „Rozumiem, że treść e-maila zostanie wysłana do Anthropic…” i kliknij
+**Wyślij do Claude (płatne)**. Pole zgody jest po każdym kliknięciu puste: kolejne żądanie wymaga nowej zgody. Zgoda dotyczy dokładnie tej wiadomości, jej niezmienionej treści (odcisk), wybranego modelu i
+zaakceptowanego kosztu. Zmiana któregokolwiek wymaga nowego podglądu. Powtórne wysłanie tej samej wiadomości tym samym modelem
+niczego nie wysyła (pokazuje zapisaną analizę), a drugie identyczne żądanie w trakcie pierwszego jest odrzucane.
+
+**E5. Porównanie.** Gdy istnieją obie analizy, zobaczysz tabelę: pole, wartość z `rule_based`, wartość z Claude, wynik
+(zgodne / różne / tylko w jednej) i statusy. Wartości zaproponowane przez Claude, których nie potwierdza tekst e-maila
+(zmyślone), są **odrzucane lokalnie** i wymienione osobno. Wyniki punktowe reguł nie są prawdopodobieństwami. Porównanie jest
+tylko do odczytu: **istniejący przypadek zachowuje swoją analizę i poprawki**.
+
+**E6. Przypadek z wybranej analizy.** Dla wiadomości **bez** przypadku możesz wybrać analizę (`rule_based` lub Claude) i utworzyć z niej
+przypadek. Przypadek oparty o Claude jest wszędzie oznaczony jako `llm` (ekran szczegółów, audyt, kolumna „Metoda analizy” w Excelu),
+nigdy nie jest zatwierdzany automatycznie i wymaga decyzji człowieka jak każdy inny.
+
+**E7. Awarie.** Przekroczenie czasu, limit zapytań, błąd klucza albo niepoprawna odpowiedź kończą się komunikatem i **bez zapisanej
+analizy**. Aplikacja **nie ponawia** płatnych żądań automatycznie. Nieudane żądanie widać w tabeli „Zapisane żądania do Claude”
+(mogło zostać naliczone).
+
+**E8. Jednorazowy autoryzowany test na żywo (tylko na Twoje polecenie).** Kroki są w README (Stage 7, „One authorized low-cost
+live test”). Zaleca się jeden fikcyjny mail i model Haiku, a opcjonalnie benchmark na zbiorze `challenge` z `--max-cases 5`.
+
+**E9. Ograniczenia.** Lokalny budżet 24 h rezerwuje koszt przed wysłaniem, ale **nie jest gwarantowanym limitem rachunku Anthropic**. Jeśli ten sam cytat (kwota, ilość, data) występuje w mailu kilka razy, pole jest oznaczane jako niejednoznaczne. Jakość modelu nie była sprawdzona na prawdziwym API (to dopiero Twój test). Szacunki kosztów są lokalne i
+przybliżone. Brak logowania i budżetów per użytkownik. Istniejącemu przypadkowi nie można podmienić analizy (tylko porównanie).
+
 ## Ekrany w skrócie
 
 | Ekran | Do czego służy |
@@ -172,3 +220,4 @@ pobrany). Brak logowania: eksportować może każdy, kto otworzy stronę.
 | Szczegóły przypadku | oryginał, analiza, poprawki, decyzje, audyt |
 | Wiadomości | wszystkie zaimportowane wiadomości; analiza tych bez przypadku |
 | Eksport do Excela | plik .xlsx z zatwierdzonymi przypadkami (tylko odczyt, niczego nie zmienia) |
+| Analiza Claude | opcjonalna, płatna analiza modelem Claude, zgoda przy każdym żądaniu, porównanie z rule_based |

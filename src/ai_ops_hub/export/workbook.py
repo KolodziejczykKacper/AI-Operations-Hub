@@ -93,6 +93,7 @@ COLUMNS: tuple[Column, ...] = (
     Column("unconfirmed", "Pola do weryfikacji (niepotwierdzone)", 44, wrap=True),
     Column("corrections", "Poprawki człowieka", 50, wrap=True),
     Column("version", "Wersja przypadku", 12),
+    Column("analysis_method", "Metoda analizy", 30),
 )
 HEADERS: tuple[str, ...] = tuple(c.header for c in COLUMNS)
 
@@ -220,6 +221,8 @@ def _row_cells(ws: Worksheet, r: int, row: ExportRow, columns: dict[str, int]) -
     if row.corrections:
         text("corrections", "\n".join(row.corrections), multiline=True)
     ws.cell(row=r, column=columns["version"], value=int(row.version))
+    method = "llm: Claude API" if row.analysis_method == "llm" else row.analysis_method
+    text("analysis_method", f"{method} {row.analyzer_version}".strip())
 
 
 def _style_data_sheet(ws: Worksheet, last_row: int) -> None:
@@ -274,11 +277,13 @@ def _info_sheet(
          "ponownie otwarte (do czasu nowego zatwierdzenia) i konfliktowe wiadomości są wykluczone."),
         ("Skąd są wartości", "Z danych zatwierdzonych przez człowieka (migawka decyzji): poprawki człowieka "
          "mają pierwszeństwo przed wynikiem analizy. Nic nie jest uzupełniane: brak wartości = pusta komórka."),
-        ("[niepotwierdzone]", "Wartość z analizy regułowej, która była niejednoznaczna lub nieprawidłowa i której "
+        ("[niepotwierdzone]", "Wartość z analizy automatycznej (reguły lub model), która była niejednoznaczna lub nieprawidłowa i której "
          "człowiek nie potwierdził. Zapisana jako tekst na żółtym tle. Nie traktuj jej jako ustalonego faktu."),
         ("Zatwierdzono mimo problemów", "TAK oznacza zatwierdzenie z pisemnym uzasadnieniem mimo wykrytych "
          "problemów; uzasadnienie i lista problemów są w osobnych kolumnach."),
-        ("Analiza", "Regułowa (rule_based): dopasowanie wzorców, nie sztuczna inteligencja."),
+        ("Analiza", "Kolumna 'Metoda analizy' mówi, skąd pochodzi analiza przypadku: rule_based (dopasowanie wzorców, "
+         "nie sztuczna inteligencja) albo llm (model Claude, tylko gdy użytkownik jawnie wybrał ją dla przypadku). "
+         "W obu przypadkach wartości zatwierdził człowiek."),
         ("Bezpieczeństwo", "Teksty z e-maili są zapisane jako tekst. Wartość zaczynająca się od = + - @ | "
          "dostaje na początku apostrof, aby nie została uruchomiona jako formuła."),
         ("Daty", "Daty i godziny są w UTC."),

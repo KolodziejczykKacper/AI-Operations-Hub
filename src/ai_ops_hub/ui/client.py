@@ -26,6 +26,7 @@ from ai_ops_hub.ui import models as m
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_TIMEOUT = httpx.Timeout(connect=3.0, read=20.0, write=20.0, pool=3.0)
+CLAUDE_TIMEOUT_SECONDS = 75.0  # longer than the server-side provider timeout (30 s by default)
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 FALLBACK_FILENAME = "approved-cases.xlsx"
@@ -165,9 +166,11 @@ class ApiClient:
         content: bytes | None = None,
         content_type: str | None = None,
         ok_statuses: tuple[int, ...] = (),
+        timeout: float | None = None,
     ) -> Any:
         response = self._send(
-            method, path, params=params, json_body=json_body, content=content, content_type=content_type
+            method, path, params=params, json_body=json_body, content=content, content_type=content_type,
+            timeout=timeout,
         )
         try:
             data = response.json()
@@ -188,6 +191,7 @@ class ApiClient:
         content: bytes | None = None,
         content_type: str | None = None,
         accept: str = "application/json",
+        timeout: float | None = None,
     ) -> "httpx.Response":
         """One HTTP round trip with the timeout / unavailable handling; no status interpretation."""
         mutating = method.upper() != "GET"
@@ -196,8 +200,9 @@ class ApiClient:
             headers["Content-Type"] = content_type
         params = {k: v for k, v in (params or {}).items() if v is not None}
         try:
+            extra = {} if timeout is None else {"timeout": timeout}
             response = self._http.request(
-                method, path, params=params or None, json=json_body, content=content, headers=headers
+                method, path, params=params or None, json=json_body, content=content, headers=headers, **extra
             )
         except httpx.ConnectError as exc:
             raise BackendUnavailable(
@@ -301,6 +306,48 @@ class ApiClient:
             case_count=_int_header(response, "x-export-case-count"),
             skipped_count=_int_header(response, "x-export-skipped-count"),
         )
+
+    # -- optional Claude analysis (nothing here runs unless the user clicks; the paid call is a write) --
+
+    def claude_status(self) -> m.ClaudeStatus:
+        return self._parse(m.ClaudeStatus, self._request("GET", "/claude/status"))
+
+    def claude_preview(self, message_id: int) -> m.ClaudePreview:
+        return self._parse(m.ClaudePreview, self._request("GET", f"/messages/{int(message_id)}/claude/preview"))
+
+    def list_analyses(self, message_id: int) -> list[m.Analysis]:
+        data = self._request("GET", f"/messages/{int(message_id)}/analyses")
+        return [self._parse(m.Analysis, item) for item in self._as_list(data)]
+
+    def claude_usage(self, message_id: int) -> list[m.LlmUsage]:
+        data = self._request("GET", f"/messages/{int(message_id)}/claude/usage")
+        return [self._parse(m.LlmUsage, item) for item in self._as_list(data)]
+
+    def compare_analyses(
+        self, message_id: int, analysis_a: int | None = None, analysis_b: int | None = None
+    ) -> m.Comparison:
+        data = self._request("GET", f"/messages/{int(message_id)}/compare",
+                             params={"analysis_a": analysis_a, "analysis_b": analysis_b})
+        return self._parse(m.Comparison, data)
+
+    def claude_analyze(
+        self, message_id: int, *, model: str, accepted_max_cost_usd: float, content_fingerprint: str
+    ) -> m.ClaudeAnalyzeResult:
+        """PAID. Never retried here. The read timeout is longer than the server's provider timeout."""
+        body = {
+            "message_id": int(message_id),
+            "content_fingerprint": content_fingerprint,
+            "confirm_send_to_anthropic": True,
+            "model": model,
+            "accepted_max_cost_usd": accepted_max_cost_usd,
+        }
+        data = self._request("POST", f"/messages/{int(message_id)}/claude/analyze", json_body=body,
+                             timeout=CLAUDE_TIMEOUT_SECONDS)
+        return self._parse(m.ClaudeAnalyzeResult, data)
+
+    def create_case(self, message_id: int, analysis_id: int) -> m.CaseSummary:
+        data = self._request("POST", f"/messages/{int(message_id)}/case", json_body={"analysis_id": analysis_id})
+        return self._parse(m.CaseSummary, data)
 
     @staticmethod
     def _as_list(data: Any) -> list:

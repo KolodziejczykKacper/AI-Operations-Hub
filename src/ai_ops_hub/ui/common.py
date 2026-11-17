@@ -10,7 +10,7 @@ import streamlit as st
 from ai_ops_hub.ui.client import ApiClient, ApiError, BackendUnavailable, ClientError, InvalidResponse
 from ai_ops_hub.ui.safe import esc
 
-PAGES = ("Panel", "Import", "Przypadki", "Szczegóły przypadku", "Wiadomości", "Eksport do Excela")
+PAGES = ("Panel", "Import", "Przypadki", "Szczegóły przypadku", "Wiadomości", "Eksport do Excela", "Analiza Claude")
 
 START_BACKEND_HELP = (
     ".venv\\Scripts\\python -m ai_ops_hub.api --db data/local/demo.db"

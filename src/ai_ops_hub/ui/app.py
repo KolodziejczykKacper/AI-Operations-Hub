@@ -7,7 +7,7 @@ import streamlit as st
 from ai_ops_hub.ui.client import ApiClient, BackendUnavailable, ClientError
 from ai_ops_hub.ui.common import PAGES, get_client, show_backend_down
 from ai_ops_hub.ui.safe import esc
-from ai_ops_hub.ui.views import cases, dashboard, detail, export_page, import_page, messages
+from ai_ops_hub.ui.views import cases, claude_page, dashboard, detail, export_page, import_page, messages
 
 # Widget state is dropped by Streamlit when a widget is not drawn in a run (e.g. while another
 # screen is open). Re-assigning these keys keeps filters and unsaved drafts across navigation.
@@ -20,6 +20,7 @@ _SCREENS = {
     "Szczegóły przypadku": detail.render,
     "Wiadomości": messages.render,
     "Eksport do Excela": export_page.render,
+    "Analiza Claude": claude_page.render,
 }
 
 
@@ -50,7 +51,8 @@ def _sidebar(client: ApiClient) -> bool:
             ok = True
         st.caption(f"API: {esc(client.base_url)}")
         st.caption(
-            "Analiza wiadomości jest **regułowa** (rule_based): dopasowanie wzorców, nie model AI. "
+            "Domyślna analiza jest **regułowa** (rule_based): dopasowanie wzorców, nie model AI. "
+            "Analiza modelem językowym jest osobną, opcjonalną i płatną funkcją, uruchamianą tylko jawnie. "
             "Decyzje zawsze podejmuje człowiek."
         )
         st.caption("Brak logowania: zmiany są podpisane etykietą local_demo_user. Używaj tylko lokalnie.")

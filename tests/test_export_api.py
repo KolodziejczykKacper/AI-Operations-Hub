@@ -416,7 +416,7 @@ def test_a_larger_dataset_exports_completely(client):
         new_approved(client, n)
     content = export_bytes(client)
     assert ids(content) == list(range(1, 61))
-    assert open_xlsx(content)[DATA_SHEET].auto_filter.ref == f"A1:Z61"
+    assert open_xlsx(content)[DATA_SHEET].auto_filter.ref == "A1:AA61"
 
 
 # --- failures ---------------------------------------------------------------------------------------

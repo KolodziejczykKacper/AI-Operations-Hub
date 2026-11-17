@@ -11,6 +11,7 @@ from sqlalchemy import Engine
 from ai_ops_hub.config import Settings
 from ai_ops_hub.services.analysis_service import AnalysisService
 from ai_ops_hub.services.case_service import CaseService
+from ai_ops_hub.services.claude_service import ClaudeService
 from ai_ops_hub.services.export_service import ExportService
 from ai_ops_hub.services.import_service import ImportService
 
@@ -25,6 +26,7 @@ class Services:
     analysis: AnalysisService
     cases: CaseService
     exports: ExportService
+    claude: ClaudeService
 
 
 def get_services(request: Request) -> Services:
