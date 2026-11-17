@@ -118,6 +118,50 @@ odświeżania, spróbuj zapisać inną: aplikacja nie nadpisze nowszych danych, 
 o zmianie wersji, wczyta aktualny stan i **zachowa Twoje niezapisane zmiany** w formularzu,
 żebyś mógł je sprawdzić i zapisać ponownie.
 
+## 6. Przykład D: eksport zatwierdzonych przypadków do Excela
+
+Eksport zawiera **wyłącznie przypadki zatwierdzone** i dane **zatwierdzone przez człowieka** (poprawki
+mają pierwszeństwo przed wynikiem analizy regułowej). Niczego nie wysyła i niczego nie zmienia.
+
+**D1. Przygotuj dane.** Zaimportuj kilka fikcyjnych maili (Import → Wklej tekst, z analizą), np. mail z
+przykładu A, jego odmiany z innym `Message-ID`, oraz fakturę z terminem „do 20 listopada 2026”.
+Następnie na ekranie szczegółów:
+
+* jeden przypadek **zatwierdź** (np. gotowy, bez problemów),
+* jeden **popraw** (produkt `Pompa Alfa`, termin `2026-12-15`, notatka) i zatwierdź,
+* jeden **zatwierdź mimo ostrzeżeń** (z pisemnym uzasadnieniem, min. 10 znaków),
+* jeden **odrzuć**, a jeden zostaw otwarty,
+* jeden zatwierdzony **otwórz ponownie** (zniknie z eksportu do czasu ponownego zatwierdzenia).
+
+**D2. Eksport.** Ekran **Eksport do Excela**. Zobaczysz liczbę przypadków gotowych do eksportu
+(tylko zatwierdzone). Opcjonalnie zaznacz „Ogranicz do zakresu dat zatwierdzenia”. Kliknij
+**Wygeneruj plik Excel**, a potem **Pobierz plik Excel (.xlsx)**. Komunikat „Plik jest gotowy” oznacza,
+że serwer wygenerował plik; aplikacja nie twierdzi, że został zapisany na dysku. Odświeżenie strony
+ani kliknięcie pobrania nie generuje pliku ponownie.
+
+**D3. Jak czytać plik.**
+
+* Arkusz **Zatwierdzone przypadki**: jeden wiersz na przypadek, stała kolejność kolumn (ID, kategoria,
+  nadawca, temat, daty importu i zatwierdzenia w UTC, produkt, ilość, jednostka, kwota, waluta, termin,
+  żądana data, numer referencyjny, kontakt, e-mail, telefon, notatki, override, poprawki człowieka, wersja).
+  Brak wartości to **pusta komórka**: nic nie jest zgadywane.
+* Wartość z `[niepotwierdzone]` i żółtym tłem była niejednoznaczna w analizie i nie została potwierdzona
+  przez człowieka (np. termin `15/12` bez roku). Nie traktuj jej jako faktu. Takie pola są też wymienione
+  w kolumnie „Pola do weryfikacji”.
+* **Zatwierdzono mimo problemów = TAK**: kolumny obok pokazują uzasadnienie i zastąpione problemy.
+* Kolumna „Poprawki człowieka” pokazuje: `Termin realizacji: analiza „--12-15” → człowiek „2026-12-15”`.
+* Arkusz **Informacje**: kiedy wygenerowano plik, zakres, liczby, legenda; analiza opisana jako regułowa
+  (nie AI).
+
+**D4. Bezpieczeństwo.** Tekst z maila zaczynający się od `=`, `+`, `-` lub `@` (np. temat
+`=HYPERLINK("http://...")`) jest zapisany jako zwykły tekst z apostrofem na początku i nigdy nie
+zostanie uruchomiony jako formuła. W pliku nie ma hiperłączy ani makr.
+
+**D5. Ograniczenia.** Jeden plik to maksymalnie 500 przypadków (powyżej: komunikat z prośbą o zawężenie
+zakresu dat). Plik jest kopią z chwili wygenerowania: późniejsze zmiany w aplikacji wymagają ponownego
+wygenerowania. Eksport nie zapisuje zdarzenia w dzienniku audytu (serwer nie wie, czy plik został
+pobrany). Brak logowania: eksportować może każdy, kto otworzy stronę.
+
 ## Ekrany w skrócie
 
 | Ekran | Do czego służy |
@@ -127,3 +171,4 @@ o zmianie wersji, wczyta aktualny stan i **zachowa Twoje niezapisane zmiany** w 
 | Przypadki | lista z filtrem statusu, wyszukiwaniem (temat lub nadawca) i stronicowaniem |
 | Szczegóły przypadku | oryginał, analiza, poprawki, decyzje, audyt |
 | Wiadomości | wszystkie zaimportowane wiadomości; analiza tych bez przypadku |
+| Eksport do Excela | plik .xlsx z zatwierdzonymi przypadkami (tylko odczyt, niczego nie zmienia) |

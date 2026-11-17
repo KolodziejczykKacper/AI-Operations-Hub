@@ -45,6 +45,11 @@ DOMAIN_ERRORS: dict[type[Exception], tuple[int, str]] = {
     E.ApprovalBlockedError: (422, "approval_blocked"),
     E.InvalidCorrectionError: (422, "invalid_correction"),
     E.AnalyzerContractError: (500, "analyzer_contract_violation"),
+    E.NoApprovedCasesError: (409, "no_approved_cases"),
+    E.ExportTooLargeError: (422, "export_too_large"),
+    E.InvalidExportFilterError: (422, "invalid_export_filter"),
+    E.ExportDatabaseError: (503, "export_database_error"),
+    E.ExportGenerationError: (500, "export_generation_failed"),
 }
 
 
@@ -58,6 +63,8 @@ def _domain_handler(_request: Request, exc: Exception) -> JSONResponse:
     details = None
     if isinstance(exc, E.VersionConflictError):
         details = {"current_version": exc.current_version}
+    elif isinstance(exc, E.ExportTooLargeError):
+        details = {"eligible": exc.eligible, "limit": exc.limit}
     elif isinstance(exc, (E.ApprovalBlockedError, E.InvalidCorrectionError)):
         details = {"problems": exc.problems}
     message = str(exc) if status < 500 else "the server could not complete the request"

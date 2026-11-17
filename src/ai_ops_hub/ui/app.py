@@ -7,11 +7,11 @@ import streamlit as st
 from ai_ops_hub.ui.client import ApiClient, BackendUnavailable, ClientError
 from ai_ops_hub.ui.common import PAGES, get_client, show_backend_down
 from ai_ops_hub.ui.safe import esc
-from ai_ops_hub.ui.views import cases, dashboard, detail, import_page, messages
+from ai_ops_hub.ui.views import cases, dashboard, detail, export_page, import_page, messages
 
 # Widget state is dropped by Streamlit when a widget is not drawn in a run (e.g. while another
 # screen is open). Re-assigning these keys keeps filters and unsaved drafts across navigation.
-_KEEP_PREFIXES = ("edit_", "f_", "m_", "confirm_", "detail_")
+_KEEP_PREFIXES = ("edit_", "f_", "m_", "confirm_", "detail_", "x_")
 
 _SCREENS = {
     "Panel": dashboard.render,
@@ -19,6 +19,7 @@ _SCREENS = {
     "Przypadki": cases.render,
     "Szczegóły przypadku": detail.render,
     "Wiadomości": messages.render,
+    "Eksport do Excela": export_page.render,
 }
 
 

@@ -264,11 +264,84 @@ search) and `imported_at` in case summaries. Existing responses only gained fiel
 * The case list refreshes when you interact with the page; there is no live push, so use the
   "Wczytaj aktualny stan" button or navigate to see other people's changes.
 * Search is a substring match on subject and sender only (no body search, no category filter).
-* The UI is Polish only. Large lists are paged (15 per page by default); there are no exports.
+* The UI is Polish only. Large lists are paged (15 per page by default). Excel export: see Stage 6.
 * Corrected values must use the formats the API accepts (`2026-12-15`, `12500.00 PLN`, `50 pcs`).
 * The UI is tested with Streamlit `AppTest` against the real API in memory and with mocked HTTP;
   real browser behavior (layout, uploader widget) is only covered by the manual checks in
   [docs/DEMO_PL.md](docs/DEMO_PL.md).
+
+## Stage 6: Excel export of approved cases
+
+A nontechnical user can export approved cases to a `.xlsx` workbook from the Streamlit screen
+**Eksport do Excela** (or call the API directly). It is a read-only feature: nothing is sent anywhere
+and no case changes.
+
+### How to use it
+1. Start the backend and the UI as in Stage 5 and open http://127.0.0.1:8501.
+2. Approve at least one case (screen *Szczegóły przypadku*).
+3. Open **Eksport do Excela**. The screen shows how many approved cases are eligible. Optionally
+   limit the export to an approval-date range.
+4. Click **Wygeneruj plik Excel**, then **Pobierz plik Excel (.xlsx)**. The file is generated only when you
+   click; reruns of the page and the download click do not call the API again.
+
+### What is exported
+* **Only cases whose current status is `approved`.** Rejected, `needs_review`, `ready_for_review` and
+  conflicting imports are excluded. A **reopened** case is open again, so it leaves the export until it
+  is approved again (then its new approval is exported).
+* **Values come from the approval snapshot**, i.e. what the human approved, human corrections
+  included. The snapshot is cross-checked against the case's effective data; a case whose records
+  disagree is left out and counted in the *Informacje* sheet and on the screen (never exported on trust).
+* Nothing is invented. A value the case does not state is an **empty cell**. A value the rule-based
+  analyzer was unsure about (`ambiguous` / `invalid`) that no human confirmed is written as text
+  `[niepotwierdzone] <value>` on a yellow background and listed in *Pola do weryfikacji*.
+* Overrides are visible: *Zatwierdzono mimo problemów* = TAK, the written justification and the list of
+  overridden problems. Human corrections are listed as `field: analysis "x" -> human "y"`.
+
+### Workbook structure
+Sheet **Zatwierdzone przypadki** (one row per case, ordered by case id; header row frozen, filter on,
+widths set), columns in this fixed order:
+ID przypadku, Kategoria, Nadawca, Temat e-maila, Data importu (UTC), Data zatwierdzenia (UTC),
+Produkt / usługa, Ilość, Jednostka, Kwota, Waluta, Termin realizacji, Żądana data, Numer referencyjny,
+Osoba kontaktowa, Organizacja, E-mail, Telefon, Notatka przy zatwierdzeniu, Pozostałe notatki,
+Zatwierdzono mimo problemów, Uzasadnienie (override), Zastąpione problemy,
+Pola do weryfikacji (niepotwierdzone), Poprawki człowieka, Wersja przypadku.
+
+Dates are real Excel dates (`yyyy-mm-dd`, timestamps in **UTC**), amounts and quantities are numbers
+(`#,##0.00`) when there is one confirmed, well-formed value with at most 15 significant digits; several
+values are joined with `; `. Sheet **Informacje** records when the file was generated, the filter, the
+counts and a legend. The analysis is described there as rule-based (not AI).
+
+### Formula-injection protection
+Email text, sender, subject, notes and human-typed corrections are untrusted. Every text cell is
+written with an explicit *string* type, control and invisible characters (zero-width space, BOM,
+bidi marks, tabs, NUL) are removed first so they can not hide a dangerous first character, and text
+whose first visible character is `=`, `+`, `-`, `@` or `|` (also full-width forms) gets a leading
+apostrophe. Plain signed numbers such as `+48600100200` are left alone. No hyperlinks, external
+references or macros are ever written. Cells are clipped below Excel's 32 767-character limit. Tests
+reopen the generated file with `openpyxl` and check cell types and the raw XML.
+
+### Endpoints
+| method and path | purpose | errors |
+|---|---|---|
+| `GET /exports/approved-cases/summary?approved_from&approved_to` | how many cases an export would contain now | 422 filter, 503 database |
+| `GET /exports/approved-cases.xlsx?approved_from&approved_to` | the workbook (`Content-Disposition: attachment`, `Cache-Control: no-store`) | 409 `no_approved_cases`, 422 `export_too_large` / `invalid_export_filter` / `validation_error`, 500 `export_generation_failed`, 503 `export_database_error` |
+
+`approved_from` / `approved_to` are UTC calendar days (`YYYY-MM-DD`), both inclusive. One export holds
+at most **500 cases**; above that the API refuses (it never truncates silently) and asks for a narrower
+date range. All reads happen in one database read transaction, so the file is a consistent snapshot even
+if cases change while it is generated. Business logic lives in `services/export_service.py`; the route only
+shapes the HTTP response.
+
+### Export limitations
+* **No export audit event.** Audit events belong to one message, an export spans many, and the server can
+  not know whether a generated file was ever downloaded, so it records nothing rather than claim a download.
+* No authentication: anyone who can open the UI can export (see the Stage 4 limitations).
+* The file is a point-in-time copy; Excel edits are never imported back.
+* The 500-case cap and the (UTC) date filter are the only filters; no category or text filter.
+* Values are exactly as the API stores them (`12500.00 PLN`, `2026-12-15`); no locale-specific
+  currency formats. Opening in Excel depends on its locale for the decimal separator.
+* Tested with `openpyxl` and (manually) the Streamlit UI; the file was not opened in Microsoft Excel itself
+  in the automated tests.
 
 ## Setup and tests
 ```

@@ -67,3 +67,32 @@ class InvalidCorrectionError(AIOpsError):
     def __init__(self, message: str, problems: list[dict] | None = None) -> None:
         super().__init__(message)
         self.problems = problems or []
+
+
+class ExportError(AIOpsError):
+    """Base class for Excel export failures."""
+
+
+class NoApprovedCasesError(ExportError):
+    """No approved case matches the export filter (there is nothing to export)."""
+
+
+class ExportTooLargeError(ExportError):
+    """More cases match than one export may contain; narrow the filter."""
+
+    def __init__(self, message: str, eligible: int, limit: int) -> None:
+        super().__init__(message)
+        self.eligible = eligible
+        self.limit = limit
+
+
+class InvalidExportFilterError(ExportError):
+    """The export filter is malformed (e.g. a date range that ends before it starts)."""
+
+
+class ExportDatabaseError(ExportError):
+    """The database could not be read for the export."""
+
+
+class ExportGenerationError(ExportError):
+    """The workbook could not be generated."""

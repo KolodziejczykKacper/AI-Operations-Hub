@@ -51,7 +51,12 @@ def test_swagger_ui_and_openapi_are_served(client):
 
 
 def test_the_api_has_no_endpoint_that_sends_email_or_acts_externally(client):
-    paths = " ".join(client.get("/openapi.json").json()["paths"]).lower()
+    spec_paths = client.get("/openapi.json").json()["paths"]
+    # Stage 6 adds a read-only Excel DOWNLOAD under /exports; that is not an external action,
+    # so "export" is no longer forbidden, but every export route must stay a side-effect-free GET.
+    exports = {p: ops for p, ops in spec_paths.items() if p.startswith("/exports")}
+    assert exports and all(set(ops) == {"get"} for ops in exports.values())
+    paths = " ".join(p for p in spec_paths if not p.startswith("/exports")).lower()
     for forbidden in ("send", "mail/", "export", "execute", "webhook", "auto"):
         assert forbidden not in paths
 

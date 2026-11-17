@@ -220,3 +220,19 @@ class AuditEntry(_M):
     actor: str
     timestamp: datetime
     details: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExportSummary(_M):
+    eligible_count: int
+    skipped_count: int = 0
+    max_export_cases: int
+    exceeds_limit: bool = False
+
+
+class ExportFile(_M):
+    """A generated workbook as received from the API (bytes are kept in memory only)."""
+
+    content: bytes = Field(repr=False)
+    filename: str
+    case_count: int
+    skipped_count: int = 0

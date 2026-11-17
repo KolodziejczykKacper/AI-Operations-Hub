@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import re
+from datetime import date
 from typing import Any, TypeVar
 from urllib.parse import urlsplit
 
@@ -25,7 +27,28 @@ from ai_ops_hub.ui import models as m
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_TIMEOUT = httpx.Timeout(connect=3.0, read=20.0, write=20.0, pool=3.0)
 
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+FALLBACK_FILENAME = "approved-cases.xlsx"
+
 M = TypeVar("M", bound=BaseModel)
+
+
+def _iso(value: date | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _safe_filename(disposition: str) -> str:
+    """The file name the server suggested, reduced to a plain, safe .xlsx name."""
+    match = re.search(r'filename="?([A-Za-z0-9._-]{1,100})"?', disposition)
+    name = match.group(1) if match else FALLBACK_FILENAME
+    return name if name.lower().endswith(".xlsx") and ".." not in name else FALLBACK_FILENAME
+
+
+def _int_header(response: "httpx.Response", name: str) -> int:
+    try:
+        return max(0, int(response.headers.get(name, "0")))
+    except ValueError:
+        return 0
 
 
 # --- errors --------------------------------------------------------------------------------
@@ -143,8 +166,32 @@ class ApiClient:
         content_type: str | None = None,
         ok_statuses: tuple[int, ...] = (),
     ) -> Any:
+        response = self._send(
+            method, path, params=params, json_body=json_body, content=content, content_type=content_type
+        )
+        try:
+            data = response.json()
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise InvalidResponse(f"The API returned a non-JSON answer (HTTP {response.status_code}).") from exc
+
+        if 200 <= response.status_code < 300 or response.status_code in ok_statuses:
+            return data
+        raise self._error(response.status_code, data)
+
+    def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict | None = None,
+        json_body: dict | None = None,
+        content: bytes | None = None,
+        content_type: str | None = None,
+        accept: str = "application/json",
+    ) -> "httpx.Response":
+        """One HTTP round trip with the timeout / unavailable handling; no status interpretation."""
         mutating = method.upper() != "GET"
-        headers = {"Accept": "application/json"}
+        headers = {"Accept": accept}
         if content_type:
             headers["Content-Type"] = content_type
         params = {k: v for k, v in (params or {}).items() if v is not None}
@@ -165,15 +212,7 @@ class ApiClient:
             raise BackendUnavailable(
                 f"Connection to the API failed ({type(exc).__name__}).", outcome_unknown=mutating
             ) from exc
-
-        try:
-            data = response.json()
-        except (ValueError, json.JSONDecodeError) as exc:
-            raise InvalidResponse(f"The API returned a non-JSON answer (HTTP {response.status_code}).") from exc
-
-        if 200 <= response.status_code < 300 or response.status_code in ok_statuses:
-            return data
-        raise self._error(response.status_code, data)
+        return response
 
     @staticmethod
     def _error(status: int, data: Any) -> ApiError:
@@ -225,6 +264,43 @@ class ApiClient:
 
     def get_message(self, message_id: int) -> m.MessageView:
         return self._parse(m.MessageView, self._request("GET", f"/messages/{int(message_id)}"))
+
+    def export_summary(
+        self, *, approved_from: date | None = None, approved_to: date | None = None
+    ) -> m.ExportSummary:
+        data = self._request(
+            "GET",
+            "/exports/approved-cases/summary",
+            params={"approved_from": _iso(approved_from), "approved_to": _iso(approved_to)},
+        )
+        return self._parse(m.ExportSummary, data)
+
+    def export_approved_cases(
+        self, *, approved_from: date | None = None, approved_to: date | None = None
+    ) -> m.ExportFile:
+        """Ask the server to generate the workbook (a read-only GET; never retried by the UI)."""
+        response = self._send(
+            "GET",
+            "/exports/approved-cases.xlsx",
+            params={"approved_from": _iso(approved_from), "approved_to": _iso(approved_to)},
+            accept=XLSX_MIME,
+        )
+        if not 200 <= response.status_code < 300:
+            try:
+                data = response.json()
+            except (ValueError, json.JSONDecodeError):
+                data = None
+            raise self._error(response.status_code, data)
+        content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+        body = response.content
+        if content_type != XLSX_MIME or not body.startswith(b"PK"):  # an .xlsx is a ZIP archive
+            raise InvalidResponse("The API did not return an Excel file.")
+        return m.ExportFile(
+            content=body,
+            filename=_safe_filename(response.headers.get("content-disposition", "")),
+            case_count=_int_header(response, "x-export-case-count"),
+            skipped_count=_int_header(response, "x-export-skipped-count"),
+        )
 
     @staticmethod
     def _as_list(data: Any) -> list:

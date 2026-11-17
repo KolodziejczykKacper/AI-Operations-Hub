@@ -299,6 +299,65 @@ class CaseRepository:
         return self._s.exec(stmt).all()
 
 
+class ExportRepository:
+    """Read-only queries for the Excel export (approved cases only)."""
+
+    def __init__(self, session: Session) -> None:
+        self._s = session
+
+    @staticmethod
+    def _approved(stmt, approved_from: datetime | None, approved_to_exclusive: datetime | None):
+        stmt = stmt.join(MessageRecord, MessageRecord.id == CaseRecord.message_id).where(
+            CaseRecord.status == "approved",
+            MessageRecord.import_status != ImportStatus.CONFLICT.value,
+        )
+        if approved_from is not None:
+            stmt = stmt.where(col(CaseRecord.decided_at) >= approved_from)
+        if approved_to_exclusive is not None:
+            stmt = stmt.where(col(CaseRecord.decided_at) < approved_to_exclusive)
+        return stmt
+
+    def count_approved(self, approved_from: datetime | None, approved_to_exclusive: datetime | None) -> int:
+        stmt = self._approved(select(func.count()).select_from(CaseRecord), approved_from, approved_to_exclusive)
+        return int(self._s.exec(stmt).one())
+
+    def approved_cases(
+        self, approved_from: datetime | None, approved_to_exclusive: datetime | None, limit: int
+    ) -> list[tuple[CaseRecord, MessageRecord, AnalysisRecord]]:
+        stmt = self._approved(
+            select(CaseRecord, MessageRecord, AnalysisRecord).join(
+                AnalysisRecord, AnalysisRecord.id == CaseRecord.analysis_id
+            ),
+            approved_from,
+            approved_to_exclusive,
+        )
+        return [tuple(r) for r in self._s.exec(stmt.order_by(col(CaseRecord.id)).limit(limit)).all()]
+
+    def corrections_by_case(self, case_ids: Sequence[int]) -> dict[int, list[CaseCorrectionRecord]]:
+        out: dict[int, list[CaseCorrectionRecord]] = {i: [] for i in case_ids}
+        if case_ids:
+            stmt = (
+                select(CaseCorrectionRecord)
+                .where(col(CaseCorrectionRecord.case_id).in_(list(case_ids)))
+                .order_by(col(CaseCorrectionRecord.id))
+            )
+            for r in self._s.exec(stmt).all():
+                out[r.case_id].append(r)
+        return out
+
+    def reviews_by_case(self, case_ids: Sequence[int]) -> dict[int, list[CaseReviewRecord]]:
+        out: dict[int, list[CaseReviewRecord]] = {i: [] for i in case_ids}
+        if case_ids:
+            stmt = (
+                select(CaseReviewRecord)
+                .where(col(CaseReviewRecord.case_id).in_(list(case_ids)))
+                .order_by(col(CaseReviewRecord.id))
+            )
+            for r in self._s.exec(stmt).all():
+                out[r.case_id].append(r)
+        return out
+
+
 def latest_corrections(rows: Sequence[CaseCorrectionRecord]) -> dict[str, list[str]]:
     """Replay the append-only history: the last 'set' per target wins, a 'revert' clears it."""
     latest: dict[str, list[str]] = {}

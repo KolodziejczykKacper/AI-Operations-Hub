@@ -11,6 +11,7 @@ from sqlalchemy import Engine
 from ai_ops_hub.config import Settings
 from ai_ops_hub.services.analysis_service import AnalysisService
 from ai_ops_hub.services.case_service import CaseService
+from ai_ops_hub.services.export_service import ExportService
 from ai_ops_hub.services.import_service import ImportService
 
 MAX_DB_ID = 2**63 - 1  # SQLite integer range; larger ids are rejected before reaching the database
@@ -23,6 +24,7 @@ class Services:
     imports: ImportService
     analysis: AnalysisService
     cases: CaseService
+    exports: ExportService
 
 
 def get_services(request: Request) -> Services:

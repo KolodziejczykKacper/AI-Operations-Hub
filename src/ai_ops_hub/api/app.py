@@ -16,7 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ai_ops_hub.analysis import RuleBasedAnalyzer
 from ai_ops_hub.analysis.base import Analyzer
-from ai_ops_hub.api import routes_cases, routes_messages
+from ai_ops_hub.api import routes_cases, routes_exports, routes_messages
 from ai_ops_hub.api.deps import Services, ServicesDep
 from ai_ops_hub.api.errors import install_error_handlers
 from ai_ops_hub.api.limits import BodySizeLimitMiddleware
@@ -25,6 +25,7 @@ from ai_ops_hub.config import Settings, get_settings
 from ai_ops_hub.db.engine import create_db_engine, init_db
 from ai_ops_hub.services.analysis_service import AnalysisService
 from ai_ops_hub.services.case_service import CaseService
+from ai_ops_hub.services.export_service import ExportService
 from ai_ops_hub.services.import_service import ImportService, utc_now
 
 # Host headers the local demo answers to. Refusing others blocks DNS-rebinding attacks.
@@ -58,6 +59,7 @@ def create_app(
         imports=ImportService(engine, clock),
         analysis=AnalysisService(engine, analyzer or RuleBasedAnalyzer(), clock),
         cases=CaseService(engine, clock),
+        exports=ExportService(engine, clock),
     )
 
     @asynccontextmanager
@@ -87,4 +89,5 @@ def create_app(
 
     app.include_router(routes_messages.router)
     app.include_router(routes_cases.router)
+    app.include_router(routes_exports.router)
     return app
