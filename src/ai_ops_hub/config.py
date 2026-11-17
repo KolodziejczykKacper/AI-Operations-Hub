@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///data/local/ai_ops_hub.db"
     sqlite_busy_timeout_ms: int = Field(5_000, ge=0, le=60_000)
 
+    # Local REST API. Bound to loopback by default; there is no authentication (see README).
+    api_host: str = "127.0.0.1"
+    api_port: int = Field(8000, ge=1, le=65535)
+
     @field_validator("database_url")
     @classmethod
     def _sqlite_only(cls, v: str) -> str:

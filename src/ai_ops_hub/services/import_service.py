@@ -36,6 +36,7 @@ from ai_ops_hub.schemas import (
     ImportResult,
     ImportStatus,
     ParsedMessage,
+    MessageDetail,
     StoredMessage,
 )
 
@@ -196,6 +197,15 @@ class ImportService:
         with Session(self._engine, expire_on_commit=False) as session:
             record = MessageRepository(session).get(message_id)
             return _stored(record) if record else None
+
+    def get_message_detail(self, message_id: int) -> MessageDetail | None:
+        with Session(self._engine, expire_on_commit=False) as session:
+            record = MessageRepository(session).get(message_id)
+            return MessageDetail.model_validate(record) if record else None
+
+    def count_messages(self) -> int:
+        with Session(self._engine, expire_on_commit=False) as session:
+            return MessageRepository(session).count()
 
     def list_messages(self, limit: int = 100, offset: int = 0) -> list[StoredMessage]:
         with Session(self._engine, expire_on_commit=False) as session:

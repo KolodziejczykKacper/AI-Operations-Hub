@@ -1,6 +1,8 @@
 # AI Operations Hub
 
-Stage 1 only: message ingestion foundations (no database, API, UI, analyzer or exports yet).
+Local demo of an email-handling workflow: import business emails, analyze them with a
+**rule-based** analyzer, correct the extracted data and explicitly approve or reject cases through a
+REST API (Stage 4). No UI yet, no AI model, no e-mail sending, no external actions.
 
 All sample data in `tests/data/samples/` is fictional (reserved `.example` domains).
 
@@ -73,10 +75,137 @@ The analyzer matches patterns; it does not understand language. Things it cannot
 * **Prompt injection:** only known phrases are detected; the real defence is that the analyzer
   performs no actions and every result goes to a human.
 
+## Stage 4: REST API, cases and human review
+
+```
+.venv\Scripts\python -m pip install -e ".[dev]"
+.venv\Scripts\python -m ai_ops_hub.api --db data/local/demo.db
+```
+Swagger UI: **http://127.0.0.1:8000/docs** (OpenAPI: `/openapi.json`). The server listens on
+`127.0.0.1` only; any other `--host` is refused unless `--allow-remote` is given (see limitations).
+A step-by-step walkthrough in Polish is in [docs/DEMO_PL.md](docs/DEMO_PL.md).
+
+### Rule-based analysis is not AI
+The analyzer matches patterns (a lexicon, regular expressions, date/number parsing). It understands
+no language, learns nothing and calls no model. Every result is labelled `analysis_method=rule_based`;
+its scores are rule hits, not probabilities. A future LLM adapter would plug in behind the same
+`Analyzer` interface and would be labelled differently. **A human decides every case.**
+
+### Three separate states
+| what | where | values |
+|---|---|---|
+| import state | `messages.import_status` | `imported`, `conflict` |
+| what the analyzer said | `analyses` (immutable, one row per analyzer version) | category, fields + source spans, warnings |
+| review state | `cases.status` | `needs_review`, `ready_for_review`, `approved`, `rejected` |
+
+A **case** (one per message) is created when a message is analyzed. A message imported as a
+`conflict` is never analyzed and never gets a case (service check + database trigger). A case keeps
+reviewing the analysis it was created from; a later analyzer version adds a new analysis row but does
+not change the case.
+
+### Review status transitions
+| from | to | how |
+|---|---|---|
+| needs_review <-> ready_for_review | | automatic, recomputed from the **effective** data after each edit (audited as `system`); never a decision |
+| needs_review / ready_for_review | approved | `POST /cases/{id}/approve`; blocked (422) while problems remain, unless `override_reason` is given |
+| needs_review / ready_for_review | rejected | `POST /cases/{id}/reject` (reason required) |
+| approved / rejected | needs_review / ready_for_review | `POST /cases/{id}/reopen` (reason required); the status is recomputed from the data |
+
+Everything else is illegal (409): approved to rejected directly, editing a closed case, deciding twice.
+`ready_for_review` only means "no known problems"; it is **not** an approval. A trigger in the
+database refuses `approved`/`rejected` unless a matching human decision record exists, and a case
+can never be created already decided.
+
+### Endpoints
+| method and path | purpose | success | errors |
+|---|---|---|---|
+| `GET /health` | liveness + database check | 200 | |
+| `POST /messages/eml` | import a `.eml` (raw bytes; `Content-Type: message/rfc822` or `application/octet-stream`) | 201 new, 200 duplicate, **409 conflict** (stored; body = import result) | 413 too large, 415 content type, 422 empty/malformed |
+| `POST /messages/text` | import pasted text `{"text": "..."}` | 201 / 200 / 409 as above | 400 invalid JSON, 413, 422 |
+| `GET /messages?limit&offset` | list messages (limit 1-200) | 200 | 422 |
+| `GET /messages/{id}` | message with original body and case link | 200 | 404 |
+| `POST /messages/{id}/analyze` | run the analyzer, open the case (idempotent) | 201 new, 200 existing | 404, **409 conflicting import** |
+| `GET /messages/{id}/analysis` | latest analysis with warnings | 200 | 404 |
+| `GET /messages/{id}/analyses` | all analyses, oldest first | 200 | 404 |
+| `GET /messages/{id}/audit` | audit trail of the message | 200 | 404 |
+| `GET /cases?status&limit&offset` | list cases | 200 | 422 |
+| `GET /cases/{id}` | original email, effective fields + source spans, problems, allowed actions | 200 | 404 |
+| `PATCH /cases/{id}` | correct values and/or add a note | 200 | 404, 409, 422 |
+| `POST /cases/{id}/approve` | explicit approval | 200 | 404, 409, 422 `approval_blocked` |
+| `POST /cases/{id}/reject` | explicit rejection | 200 | 404, 409 |
+| `POST /cases/{id}/reopen` | reopen a decided case | 200 | 404, 409 |
+| `GET /cases/{id}/history` | all corrections and decisions | 200 | 404 |
+| `GET /cases/{id}/audit` | audit trail (import, analysis, case events) | 200 | 404 |
+
+All errors share one shape: `{"error": {"code": "...", "message": "...", "details": {...}}}`.
+Codes: `validation_error`, `invalid_json`, `payload_too_large`, `input_too_large`, `empty_input`,
+`malformed_message`, `unsupported_media_type`, `message_not_found`, `case_not_found`,
+`conflict_not_analyzable`, `case_not_available`, `invalid_transition`, `case_not_editable`,
+`version_conflict`, `approval_blocked`, `invalid_correction`, `not_found`, `method_not_allowed`,
+`internal_error`. The 409 answer to a conflicting *import* is the exception: it carries the normal
+import result because the conflicting message is stored.
+
+### Example requests (fictional data, Windows `cmd`)
+```
+curl -X POST http://127.0.0.1:8000/messages/text -H "Content-Type: application/json" -d "{\"text\": \"From: jan@zielonadolina.example\nSubject: Order\n\nWe would like to order 10 pcs of Pump Alpha. Please deliver by 15/12.\"}"
+curl -X POST http://127.0.0.1:8000/messages/1/analyze
+curl -X PATCH http://127.0.0.1:8000/cases/1 -H "Content-Type: application/json" -d "{\"expected_version\": 1, \"corrections\": {\"deadline\": [\"2026-12-15\"]}, \"note\": \"Date confirmed by phone.\"}"
+curl -X POST http://127.0.0.1:8000/cases/1/approve -H "Content-Type: application/json" -d "{\"expected_version\": 2}"
+curl http://127.0.0.1:8000/cases/1/audit
+curl -X POST http://127.0.0.1:8000/messages/eml -H "Content-Type: message/rfc822" --data-binary @tests/data/samples/01_invoice_dispute_pl.eml
+```
+The Swagger UI is easier than curl.
+
+### Corrections
+`PATCH /cases/{id}` takes `corrections`: `{target: [values]}` where target is a field name
+(`product`, `quantity`, `amount`, `deadline`, ...) or `category`; `null` reverts to the analyzer value;
+`[]` means "there is no such value". Values are validated (dates `YYYY-MM-DD`, amounts `12500.00 PLN`,
+quantities `50 pcs`, ...). Re-entering the analyzer's own value *confirms* it. Corrections go to the
+append-only `case_corrections` table; the original message and the analysis row are never modified,
+and the case view shows both the human value and the analyzer value.
+
+### Approval checks
+Before approval the **effective** data (analyzer output + corrections) is validated: category not
+`other` and not still ambiguous, required fields present (order: product, quantity; complaint and
+document request: reference; inquiry: product or reference), no unresolved ambiguous or invalid amount,
+quantity or date, no unresolved date range, and no prompt-injection warning. An injection warning can
+not be corrected away; it needs an explicit `override_reason` (min. 10 characters). The override and
+the problems it covered are stored with the decision and in the audit event, together with a
+snapshot of exactly what was approved. Approval performs no external action.
+
+### Concurrency
+Optimistic locking: every case has a `version`. Each mutation sends `expected_version`; if the case
+moved on, nothing is written and the answer is 409 `version_conflict` with the current version, so a
+stale form can never overwrite a newer edit. Each mutation is one short `BEGIN IMMEDIATE` transaction
+holding the data change, the history rows and the audit event, with a compare-and-set
+`UPDATE ... WHERE version = ?`. Double-submitting an approval gives one decision and one 409.
+Imports are deduplicated by content (not by idempotency keys).
+
+### Known security limitations (local demo)
+* **No authentication or authorization.** Every change is attributed to the fixed label
+  `local_demo_user`; this is a label, not proof of identity. The client cannot choose it: unknown
+  request fields (`actor`, `reviewer`, `status`, ...) are rejected with 422 and headers are ignored.
+* The server binds to `127.0.0.1`; `Host` headers other than localhost / 127.0.0.1 are refused
+  (DNS-rebinding defence; IPv6 literals are not supported). No CORS headers are ever sent, and the
+  `.eml` upload accepts only non-"simple" content types, so a web page cannot trigger imports
+  cross-site. Any local process on your machine can still use the API.
+* Do not expose the API to a network: no TLS, no rate limiting, no user separation.
+* Request bodies are size-limited (transport and parser limits) but there is no per-client quota.
+* Stored emails are returned verbatim in JSON; a future UI must escape them.
+* The audit trail is an ordinary table: anyone with database access can edit it. Corrections and
+  review rows are protected by append-only triggers; `audit_events` (a Stage 2 table) is not.
+
+### Database
+Tables are created with `CREATE TABLE IF NOT EXISTS` semantics on startup. Stage 4 only **adds**
+`cases`, `case_corrections` and `case_reviews` (plus triggers); existing messages, analyses and
+audit events are never altered, deleted or recreated. **Migrations are not implemented**: a future
+change to an existing table needs a real migration tool; back up `data/local/*.db` before upgrading.
+Timestamps are stored as UTC.
+
 ## Setup and tests
 ```
 python -m venv .venv
 .venv\Scripts\python -m pip install -e ".[dev]"
 .venv\Scripts\python -m pytest
 ```
-Tests need no internet and no API keys.
+Tests need no internet and no API keys (the API tests use FastAPI's `TestClient` on temporary databases).

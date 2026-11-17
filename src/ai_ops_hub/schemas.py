@@ -178,14 +178,7 @@ class AuditEntry(BaseModel):
     details: dict[str, Any]
 
 
-# --- Cases and audit (schemas only; persistence arrives in a later stage) ---
-
-
-class CaseStatus(StrEnum):
-    NEW = "new"
-    PENDING_REVIEW = "pending_review"
-    APPROVED = "approved"
-    REJECTED = "rejected"
+# --- Audit (case review statuses live in ai_ops_hub.cases.schemas) ---
 
 
 class Actor(StrEnum):
@@ -204,6 +197,8 @@ class AuditEventType(StrEnum):
     CONFLICT_DETECTED = "conflict_detected"
     CASE_APPROVED = "case_approved"
     CASE_REJECTED = "case_rejected"
+    CASE_REOPENED = "case_reopened"
+    CASE_NOTE_ADDED = "case_note_added"
     # Deliberately no "email_sent": the system never sends email.
 
 
@@ -221,3 +216,28 @@ class AuditEvent(BaseModel):
         if self.event_type is AuditEventType.CASE_APPROVED and self.actor is not Actor.HUMAN:
             raise ValueError("cases can only be approved by a human actor")
         return self
+
+
+class MessageDetail(BaseModel):
+    """Full read model of a stored message, including the original body text."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: int
+    dedup_key: str
+    content_fingerprint: str
+    message_id: str | None
+    message_id_raw: str | None
+    source_kind: SourceKind
+    subject: str | None
+    from_addr: str | None
+    to_addrs: list[str]
+    date_raw: str | None
+    sent_at: datetime | None
+    body_text: str
+    raw_sha256: str
+    missing_headers: list[str]
+    warnings: list[str]
+    import_status: ImportStatus
+    conflicts_with_id: int | None
+    imported_at: datetime
