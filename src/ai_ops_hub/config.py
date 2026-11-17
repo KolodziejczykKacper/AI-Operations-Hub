@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +25,17 @@ class Settings(BaseSettings):
     max_text_chars: int = Field(200_000, gt=0, le=2_000_000)
     max_mime_parts: int = Field(50, gt=0, le=500)
     max_headers: int = Field(300, gt=0, le=2_000)
+
+    # Persistence. Default lives under data/local/, which Git ignores.
+    database_url: str = "sqlite:///data/local/ai_ops_hub.db"
+    sqlite_busy_timeout_ms: int = Field(5_000, ge=0, le=60_000)
+
+    @field_validator("database_url")
+    @classmethod
+    def _sqlite_only(cls, v: str) -> str:
+        if not v.startswith("sqlite"):
+            raise ValueError("only SQLite database URLs are supported")
+        return v
 
 
 @lru_cache(maxsize=1)

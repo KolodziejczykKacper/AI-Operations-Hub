@@ -114,6 +114,58 @@ class DedupResult(BaseModel):
     reason: str
 
 
+# --- Stored messages and import results (Stage 2) ---------------------------
+
+
+class ImportStatus(StrEnum):
+    IMPORTED = "imported"  # canonical record for its dedup key
+    CONFLICT = "conflict"  # same key as a canonical record, different content
+
+
+class StoredMessage(BaseModel):
+    """Read model of a persisted message (no database types leak out)."""
+
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: int
+    dedup_key: str
+    content_fingerprint: str
+    message_id: str | None
+    subject: str | None
+    from_addr: str | None
+    source_kind: SourceKind
+    import_status: ImportStatus  # dedup/import state, NOT a case-handling status
+    imported_at: datetime
+    conflicts_with_id: int | None
+
+
+class ImportResult(BaseModel):
+    """Outcome of importing one parsed message.
+
+    ``message`` is the record the caller should use: the new record for NEW and
+    CONFLICT, the already-stored record for DUPLICATE. For CONFLICT,
+    ``existing_message`` is the untouched canonical record.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    decision: DedupDecision
+    message: StoredMessage
+    existing_message: StoredMessage | None = None
+    reason: str
+
+
+class AuditEntry(BaseModel):
+    model_config = ConfigDict(frozen=True, from_attributes=True)
+
+    id: int
+    message_id: int
+    event_type: AuditEventType
+    actor: Actor
+    timestamp: datetime
+    details: dict[str, Any]
+
+
 # --- Cases and audit (schemas only; persistence arrives in a later stage) ---
 
 
@@ -131,6 +183,7 @@ class Actor(StrEnum):
 
 
 class AuditEventType(StrEnum):
+    MESSAGE_IMPORTED = "message_imported"
     CASE_CREATED = "case_created"
     CASE_UPDATED = "case_updated"
     STATUS_CHANGED = "status_changed"
