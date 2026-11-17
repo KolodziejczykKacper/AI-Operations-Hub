@@ -2,13 +2,14 @@
 
 Email text, sender names and human-typed corrections are untrusted. A cell whose text starts
 with ``=``, ``+``, ``-``, ``@`` (or a tab / carriage return that hides them) can be run as a
-formula by some spreadsheet programs, or by anything that later turns the sheet into CSV.
+formula by some spreadsheet programs. (CSV export does not exist; if it is ever added, its safety
+must be designed and tested separately: nothing here has been verified for CSV.)
 
 Defences, all applied here:
 * control characters and invisible format characters (zero-width space, BOM, bidi marks, ...)
   are removed, so they can not hide a dangerous first character from a naive check;
 * if the first visible character is dangerous, the text gets a leading apostrophe. That is
-  the usual spreadsheet convention for "this is text": it stays text even after a CSV round trip;
+  the usual spreadsheet convention for "this is text" (this is not claimed to be sufficient for CSV);
 * the writer ALSO stores every string cell with an explicit string type, so it is never a formula cell.
 
 Plain signed numbers such as ``+48600100200`` are left alone: they can not form a formula.

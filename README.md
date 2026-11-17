@@ -337,6 +337,8 @@ shapes the HTTP response.
   not know whether a generated file was ever downloaded, so it records nothing rather than claim a download.
 * No authentication: anyone who can open the UI can export (see the Stage 4 limitations).
 * The file is a point-in-time copy; Excel edits are never imported back.
+* **Only .xlsx exists.** There is no CSV export, and the formula protection above has not been designed or
+  verified for CSV; a future CSV export needs its own safety work and tests.
 * The 500-case cap and the (UTC) date filter are the only filters; no category or text filter.
 * Values are exactly as the API stores them (`12500.00 PLN`, `2026-12-15`); no locale-specific
   currency formats. Opening in Excel depends on its locale for the decimal separator.
