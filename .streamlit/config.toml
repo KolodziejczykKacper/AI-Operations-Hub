@@ -1,0 +1,12 @@
+# Local-only defaults for the AI Operations Hub UI.
+[browser]
+gatherUsageStats = false   # no telemetry: nothing leaves this computer
+
+[server]
+address = "127.0.0.1"
+headless = true
+maxUploadSize = 8          # MB; the API enforces its own (smaller) limit
+enableXsrfProtection = true
+
+[theme]
+base = "light"

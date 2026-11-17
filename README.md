@@ -2,7 +2,8 @@
 
 Local demo of an email-handling workflow: import business emails, analyze them with a
 **rule-based** analyzer, correct the extracted data and explicitly approve or reject cases through a
-REST API (Stage 4). No UI yet, no AI model, no e-mail sending, no external actions.
+REST API (Stage 4) or a Streamlit dashboard (Stage 5). No AI model, no e-mail sending, no
+external actions.
 
 All sample data in `tests/data/samples/` is fictional (reserved `.example` domains).
 
@@ -201,6 +202,73 @@ Tables are created with `CREATE TABLE IF NOT EXISTS` semantics on startup. Stage
 audit events are never altered, deleted or recreated. **Migrations are not implemented**: a future
 change to an existing table needs a real migration tool; back up `data/local/*.db` before upgrading.
 Timestamps are stored as UTC.
+
+## Stage 5: Streamlit user interface
+
+Two processes, started in two terminals (Windows, from the project folder):
+
+```
+:: terminal 1 - the backend (FastAPI)
+.venv\Scripts\python -m ai_ops_hub.api --db data/local/demo.db
+
+:: terminal 2 - the user interface (Streamlit)
+.venv\Scripts\python -m ai_ops_hub.ui
+```
+Open **http://127.0.0.1:8501**. The sidebar shows whether the backend is reachable. Another backend
+address: `python -m ai_ops_hub.ui --api-url http://127.0.0.1:8123` (or the `AIOPS_API_URL` environment
+variable); only loopback addresses are accepted. A walkthrough in Polish is in
+[docs/DEMO_PL.md](docs/DEMO_PL.md).
+
+| screen | what it does |
+|---|---|
+| Panel | exact counts of all / needs_review / ready_for_review / approved / rejected cases (`GET /cases/stats`) |
+| Import | `.eml` upload or pasted text; optional rule-based analysis; clear new / duplicate / conflict messages |
+| Przypadki | case list with status filter, subject/sender search and pagination (one page is fetched at a time) |
+| Szczegóły przypadku | the original email, extracted fields with source fragments, warnings, human corrections, review note, approve / reject / reopen, audit history |
+| Wiadomości | all messages; analyze the ones without a case; conflicts are marked |
+
+### Architecture rules of the UI
+* **HTTP only.** `ai_ops_hub/ui/client.py` is the single place that talks to the backend
+  (`httpx2`). The UI imports no repositories, services or database code and has its own small
+  response models (`ui/models.py`), so it depends only on the JSON contract. The client has timeouts,
+  turns failures into typed errors (`BackendUnavailable`, `VersionConflict`, `ApprovalBlocked`, ...),
+  never retries a write, ignores proxy variables, does not follow redirects and refuses non-loopback
+  addresses. Nothing is sent to external servers; Streamlit telemetry is off (`.streamlit/config.toml`).
+* **No duplicated rules.** Allowed actions, problems, validation of corrected values and state
+  transitions all come from the API; the UI only displays them.
+* **Writes happen only on a button click.** Streamlit re-runs the whole script on every interaction,
+  but a button is true for one run only, so a selected file, typed text or pending dialog is never
+  submitted by a rerun. Approval, rejection and reopening need a second, explicit confirmation.
+* **Optimistic locking.** Every write sends the case version the user was *looking at* (not the one
+  fetched during the current rerun). On HTTP 409 `version_conflict` the UI shows what happened,
+  reloads the newest state, refreshes the fields the user did not touch, **keeps the user's unsaved
+  edits** and overwrites nothing. A banner also warns when a case changed after it was opened.
+* **Validation warnings are never silently overridden.** If the case has problems (or the server
+  refuses approval), approval needs a written reason (min. 10 characters) plus a checkbox, and both
+  are stored with the decision.
+* **Untrusted text.** Email content, extracted values and server messages are shown with
+  `st.text` / `st.text_area` / `st.dataframe`, or escaped before any markdown widget. No
+  `unsafe_allow_html`, no images or links from emails.
+* **Three things kept visibly apart:** the original message, the values from the `rule_based`
+  analysis, and the human corrections. The UI says everywhere that the analysis is pattern matching,
+  not AI.
+
+### API additions for the UI (backward compatible)
+`GET /cases/stats` (exact counts, independent of pagination), `GET /cases?q=` (subject/sender
+search) and `imported_at` in case summaries. Existing responses only gained fields.
+
+### UI limitations
+* No authentication (see the Stage 4 limitations); anyone who can open the page acts as `local_demo_user`.
+* Unsaved edits survive reruns, conflicts and visits to other screens, but **not** a browser reload
+  or a new browser tab (Streamlit session state lives in the server for one browser session).
+* The case list refreshes when you interact with the page; there is no live push, so use the
+  "Wczytaj aktualny stan" button or navigate to see other people's changes.
+* Search is a substring match on subject and sender only (no body search, no category filter).
+* The UI is Polish only. Large lists are paged (15 per page by default); there are no exports.
+* Corrected values must use the formats the API accepts (`2026-12-15`, `12500.00 PLN`, `50 pcs`).
+* The UI is tested with Streamlit `AppTest` against the real API in memory and with mocked HTTP;
+  real browser behavior (layout, uploader widget) is only covered by the manual checks in
+  [docs/DEMO_PL.md](docs/DEMO_PL.md).
 
 ## Setup and tests
 ```

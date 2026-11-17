@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import func, update
+from sqlalchemy import func, or_, update
 from sqlmodel import Session, col, select
 
 from ai_ops_hub.analysis.schemas import AnalysisResult
@@ -225,17 +225,33 @@ class CaseRepository:
         stmt = select(CaseRecord).where(CaseRecord.message_id == message_id)
         return self._s.exec(stmt).first()
 
-    def list(self, status: str | None, limit: int, offset: int) -> Sequence[CaseRecord]:
-        stmt = select(CaseRecord)
+    @staticmethod
+    def _filtered(stmt, status: str | None, q: str | None):
         if status:
             stmt = stmt.where(CaseRecord.status == status)
+        if q:
+            # substring match on subject or sender; LIKE wildcards in the query are escaped
+            stmt = stmt.join(MessageRecord, MessageRecord.id == CaseRecord.message_id).where(
+                or_(
+                    col(MessageRecord.subject).icontains(q, autoescape=True),
+                    col(MessageRecord.from_addr).icontains(q, autoescape=True),
+                )
+            )
+        return stmt
+
+    def list(
+        self, status: str | None, limit: int, offset: int, q: str | None = None
+    ) -> Sequence[CaseRecord]:
+        stmt = self._filtered(select(CaseRecord), status, q)
         return self._s.exec(stmt.order_by(col(CaseRecord.id)).offset(offset).limit(limit)).all()
 
-    def count(self, status: str | None = None) -> int:
-        stmt = select(func.count()).select_from(CaseRecord)
-        if status:
-            stmt = stmt.where(CaseRecord.status == status)
+    def count(self, status: str | None = None, q: str | None = None) -> int:
+        stmt = self._filtered(select(func.count()).select_from(CaseRecord), status, q)
         return int(self._s.exec(stmt).one())
+
+    def counts_by_status(self) -> dict[str, int]:
+        rows = self._s.exec(select(CaseRecord.status, func.count()).group_by(CaseRecord.status)).all()
+        return {status: int(n) for status, n in rows}
 
     def case_index(self, message_ids: Sequence[int]) -> dict[int, CaseRecord]:
         if not message_ids:

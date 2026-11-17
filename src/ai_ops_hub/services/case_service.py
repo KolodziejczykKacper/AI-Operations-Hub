@@ -32,6 +32,7 @@ from ai_ops_hub.cases.schemas import (
     REVIEWER_LABEL,
     CaseDetail,
     CaseHistory,
+    CaseStats,
     CaseSummary,
     CorrectionEntry,
     Problem,
@@ -483,13 +484,20 @@ class CaseService:
             return self._detail(session, case.id) if case else None
 
     def list_cases(
-        self, status: ReviewStatus | None, limit: int, offset: int
+        self, status: ReviewStatus | None, limit: int, offset: int, q: str | None = None
     ) -> tuple[list[CaseSummary], int]:
         with Session(self._engine, expire_on_commit=False) as session:
             repo = CaseRepository(session)
             value = status.value if status else None
-            rows = repo.list(value, limit, offset)
-            return [self._summary(session, r) for r in rows], repo.count(value)
+            rows = repo.list(value, limit, offset, q)
+            return [self._summary(session, r) for r in rows], repo.count(value, q)
+
+    def stats(self) -> CaseStats:
+        """Exact counts per review status (one grouped query, no pagination involved)."""
+        with Session(self._engine, expire_on_commit=False) as session:
+            counts = CaseRepository(session).counts_by_status()
+        by_status = {s: counts.get(s.value, 0) for s in ReviewStatus}
+        return CaseStats(total=sum(by_status.values()), by_status=by_status)
 
     def case_index(self, message_ids: list[int]) -> dict[int, tuple[int, ReviewStatus]]:
         """message_id -> (case_id, status) for the messages that have a case."""
@@ -539,6 +547,7 @@ class CaseService:
             decided_at=case.decided_at,
             subject=msg.subject if msg else None,
             effective_category=category,
+            imported_at=msg.imported_at if msg else None,
         )
 
     def _detail(self, session: Session, case_id: int) -> CaseDetail:

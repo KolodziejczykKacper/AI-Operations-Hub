@@ -107,6 +107,16 @@ class CaseSummary(BaseModel):
     decided_at: datetime | None
     subject: str | None = None
     effective_category: Category | None = None
+    imported_at: datetime | None = None  # when the underlying message was imported
+
+
+class CaseStats(BaseModel):
+    """Exact case counts, independent of any pagination."""
+
+    model_config = ConfigDict(frozen=True)
+
+    total: int
+    by_status: dict[ReviewStatus, int]
 
 
 class CaseDetail(BaseModel):

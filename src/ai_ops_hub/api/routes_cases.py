@@ -13,7 +13,7 @@ from fastapi import APIRouter, Query
 from ai_ops_hub.api.deps import IdPath, ServicesDep
 from ai_ops_hub.api.errors import ErrorResponse
 from ai_ops_hub.api.schemas import ApproveRequest, EditCaseRequest, Page, ReasonRequest
-from ai_ops_hub.cases.schemas import CaseDetail, CaseHistory, CaseSummary, ReviewStatus
+from ai_ops_hub.cases.schemas import CaseDetail, CaseHistory, CaseStats, CaseSummary, ReviewStatus
 from ai_ops_hub.schemas import AuditEntry
 
 router = APIRouter(prefix="/cases", tags=["cases"])
@@ -27,15 +27,31 @@ _E409 = {
 }
 
 
-@router.get("", response_model=Page[CaseSummary], summary="List cases (paginated, optional status filter)")
+@router.get(
+    "",
+    response_model=Page[CaseSummary],
+    summary="List cases (paginated; optional status filter and subject/sender search)",
+    description="`total` counts the cases matching the filters, not only this page. "
+    "`q` is a case-insensitive substring search in the subject and sender.",
+)
 def list_cases(
     services: ServicesDep,
     status: ReviewStatus | None = None,
+    q: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0, le=10_000_000)] = 0,
 ) -> Page[CaseSummary]:
-    items, total = services.cases.list_cases(status, limit, offset)
+    items, total = services.cases.list_cases(status, limit, offset, q)
     return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get(
+    "/stats",
+    response_model=CaseStats,
+    summary="Exact case counts per review status (not affected by pagination)",
+)
+def case_stats(services: ServicesDep) -> CaseStats:
+    return services.cases.stats()
 
 
 @router.get(
