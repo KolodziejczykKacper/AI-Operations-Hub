@@ -29,9 +29,9 @@ from types import SimpleNamespace
 
 from ai_ops_hub.analysis.claude import pricing
 from ai_ops_hub.analysis.claude.analyzer import ClaudeAnalyzer
-from ai_ops_hub.analysis.evaluation import CaseResult, EvalCase, EvaluationReport, load_dataset
+from ai_ops_hub.analysis.evaluation import CaseResult, EvalCase, EvaluationReport, evaluate, load_dataset
 from ai_ops_hub.analysis.rule_based import RuleBasedAnalyzer
-from ai_ops_hub.analysis.schemas import AnalysisResult, Category
+from ai_ops_hub.analysis.schemas import AnalysisInput, AnalysisResult, Category
 from ai_ops_hub.errors import ClaudeError
 from ai_ops_hub.schemas import AnalysisMethod
 
@@ -57,10 +57,7 @@ class ReplayClient:
         content = kw["messages"][0]["content"]
         subject = content.split("<email_subject>", 1)[1].split("</email_subject>", 1)[0]
         body = content.split("<email_body>", 1)[1].rsplit("</email_body>", 1)[0]
-        base = RuleBasedAnalyzer().analyze(
-            __import__("ai_ops_hub.analysis.schemas", fromlist=["AnalysisInput"]).AnalysisInput(
-                subject=subject or None, body_text=body)
-        )
+        base = RuleBasedAnalyzer().analyze(AnalysisInput(subject=subject or None, body_text=body))
         fields = [
             {"name": f.name.value, "quote": f.value.span.text, "source": f.value.span.source.value,
              "normalized": f.value.normalized, "status": f.status.value, "note": ""}
@@ -222,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"dataset {label}: {len(cases)} cases (datasets are never pooled)")
     print(f"estimate for model {model}: typical ${est['typical_usd']:.4f}, worst case ${est['worst_case_usd']:.4f} "
           f"(prices verified {est['prices_verified_on']}; an estimate is not a spending limit)")
-    base = __import__("ai_ops_hub.analysis.evaluation", fromlist=["evaluate"]).evaluate(cases, RuleBasedAnalyzer())
+    base = evaluate(cases, RuleBasedAnalyzer())
     print("\n-- rule_based baseline (offline, free) --")
     print(base.to_text().split("== WITHOUT")[0])
 
@@ -249,7 +246,8 @@ def main(argv: list[str] | None = None) -> int:
                        f"${est['worst_case_usd']:.4f}; use fewer cases (--max-cases) or authorize more")
     from ai_ops_hub.analysis.claude.analyzer import make_client
 
-    client = make_client(settings.anthropic_api_key.get_secret_value(), settings.claude_timeout_seconds)
+    client = make_client(settings.anthropic_api_key.get_secret_value(), settings.claude_timeout_seconds,
+                         settings.claude_base_url)
     analyzer = ClaudeAnalyzer(client, model=model, max_output_tokens=settings.claude_max_output_tokens)
     print("\n" + run_claude(cases, analyzer, label=label, simulated=False).to_text())
     return 0

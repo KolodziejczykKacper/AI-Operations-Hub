@@ -8,9 +8,13 @@ are ignored, never required.
 from __future__ import annotations
 
 from functools import lru_cache
+from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+OFFICIAL_CLAUDE_BASE_URL = "https://api.anthropic.com"
 
 
 class Settings(BaseSettings):
@@ -42,8 +46,31 @@ class Settings(BaseSettings):
     claude_max_cost_usd_per_request: float = Field(0.02, gt=0, le=5)  # worst-case estimate guard
     claude_daily_budget_usd: float = Field(0.25, gt=0, le=100)  # local sum of recorded estimates
     claude_timeout_seconds: float = Field(30.0, gt=0, le=300)
+    # The API key is only ever sent to this address. The SDK would otherwise obey the ANTHROPIC_BASE_URL environment
+    # variable and send the key wherever it points, so that variable is ignored. A non-official address needs an
+    # explicit opt-in and https.
+    claude_base_url: str = OFFICIAL_CLAUDE_BASE_URL
+    claude_allow_custom_base_url: bool = False
     # The key is read from ANTHROPIC_API_KEY (environment or the ignored .env), not AIOPS_*.
     anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY", repr=False)
+
+    @field_validator("claude_base_url")
+    @classmethod
+    def _https_base_url(cls, v: str) -> str:
+        parts = urlsplit(v.strip())
+        if parts.scheme != "https" or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment:
+            raise ValueError("claude_base_url must be a plain https URL (no credentials, query or fragment)")
+        return v.strip().rstrip("/")
+
+    @model_validator(mode="after")
+    def _custom_endpoint_needs_opt_in(self) -> "Settings":
+        host = urlsplit(self.claude_base_url).hostname
+        if host != urlsplit(OFFICIAL_CLAUDE_BASE_URL).hostname and not self.claude_allow_custom_base_url:
+            raise ValueError(
+                "claude_base_url is not the official Anthropic address; set AIOPS_CLAUDE_ALLOW_CUSTOM_BASE_URL=true "
+                "if you really want your API key sent there"
+            )
+        return self
 
     @field_validator("database_url")
     @classmethod

@@ -204,7 +204,7 @@ nigdy nie jest zatwierdzany automatycznie i wymaga decyzji człowieka jak każdy
 analizy**. Aplikacja **nie ponawia** płatnych żądań automatycznie. Nieudane żądanie widać w tabeli „Zapisane żądania do Claude”
 (mogło zostać naliczone).
 
-**E8. Jednorazowy autoryzowany test na żywo (tylko na Twoje polecenie).** Kroki są w README (Stage 7, „One authorized low-cost
+**E8. Jednorazowy autoryzowany test na żywo (tylko na Twoje polecenie).** Kroki są w docs/TECHNICAL_NOTES.md (Stage 7, „One authorized low-cost
 live test”). Zaleca się jeden fikcyjny mail i model Haiku, a opcjonalnie benchmark na zbiorze `challenge` z `--max-cases 5`.
 
 **E9. Ograniczenia.** Lokalny budżet 24 h rezerwuje koszt przed wysłaniem, ale **nie jest gwarantowanym limitem rachunku Anthropic**. Jeśli ten sam cytat (kwota, ilość, data) występuje w mailu kilka razy, pole jest oznaczane jako niejednoznaczne. Jakość modelu nie była sprawdzona na prawdziwym API (to dopiero Twój test). Szacunki kosztów są lokalne i

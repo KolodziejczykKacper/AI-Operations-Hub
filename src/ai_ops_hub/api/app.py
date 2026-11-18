@@ -19,6 +19,7 @@ from ai_ops_hub.analysis.base import Analyzer
 from ai_ops_hub.api import routes_cases, routes_claude, routes_exports, routes_messages
 from ai_ops_hub.api.deps import Services, ServicesDep
 from ai_ops_hub.api.errors import install_error_handlers
+from ai_ops_hub.api.guards import CrossSiteGuardMiddleware
 from ai_ops_hub.api.limits import BodySizeLimitMiddleware
 from ai_ops_hub.api.schemas import Health
 from ai_ops_hub.config import Settings, get_settings
@@ -48,7 +49,7 @@ def create_app(
     engine: Engine | None = None,
     analyzer: Analyzer | None = None,
     clock: Callable[[], datetime] = utc_now,
-    claude_client_factory: ClaudeClientFactory = make_client,
+    claude_client_factory: ClaudeClientFactory | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     owns_engine = engine is None
@@ -63,7 +64,12 @@ def create_app(
         analysis=AnalysisService(engine, analyzer or RuleBasedAnalyzer(), clock),
         cases=CaseService(engine, clock),
         exports=ExportService(engine, clock),
-        claude=ClaudeService(engine, settings, clock, claude_client_factory),
+        claude=ClaudeService(
+            engine,
+            settings,
+            clock,
+            claude_client_factory or (lambda key, timeout: make_client(key, timeout, settings.claude_base_url)),
+        ),
     )
 
     @asynccontextmanager
@@ -82,7 +88,8 @@ def create_app(
 
     max_body = max(settings.max_eml_bytes, settings.max_text_chars * 6) + 64 * 1024
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
-    app.add_middleware(BodySizeLimitMiddleware, max_bytes=max_body)  # added last = outermost
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=max_body)
+    app.add_middleware(CrossSiteGuardMiddleware)  # added last = outermost: refuses hostile web pages first
     install_error_handlers(app)
 
     @app.get("/health", response_model=Health, tags=["system"], summary="Health check")

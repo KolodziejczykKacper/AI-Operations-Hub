@@ -30,6 +30,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"refusing to listen on {args.host!r}: the API has no authentication (use --allow-remote to override)")
         return 2
 
+    if settings.claude_enabled and args.host not in LOOPBACK:
+        # The API has no authentication and the paid Claude endpoint takes its consent from the request body, so any
+        # machine that can reach the port could spend your money. Never combine the two.
+        print("refusing to listen on a non-local address while Claude analysis is enabled (no authentication, paid API)")
+        return 2
+
     if args.db:
         settings = settings.model_copy(update={"database_url": f"sqlite:///{Path(args.db).as_posix()}"})
     app = create_app(settings=settings)

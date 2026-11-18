@@ -41,6 +41,8 @@ class ClaudeStatus(BaseModel):
     enabled: bool
     key_configured: bool
     model: str
+    endpoint_host: str  # where the key and the email would be sent
+    custom_endpoint: bool  # True when it is not the official Anthropic address
     model_has_known_price: bool
     input_usd_per_mtok: float | None
     output_usd_per_mtok: float | None
@@ -65,6 +67,8 @@ class ClaudePreview(BaseModel):
     enabled: bool
     key_configured: bool
     model: str
+    endpoint_host: str
+    custom_endpoint: bool
     content_fingerprint: str
     will_send: tuple[str, ...] = ("subject", "body")
     not_sent: tuple[str, ...] = ("sender address", "recipients", "headers")

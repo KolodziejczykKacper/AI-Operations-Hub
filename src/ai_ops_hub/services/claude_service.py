@@ -20,6 +20,7 @@ import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from decimal import Decimal
+from urllib.parse import urlsplit
 
 from sqlalchemy import Engine
 from sqlalchemy.exc import IntegrityError
@@ -37,7 +38,7 @@ from ai_ops_hub.analysis.claude.models import (
 from ai_ops_hub.analysis.claude.prompt import PROMPT_VERSION
 from ai_ops_hub.analysis.compare import AnalysisComparison, compare
 from ai_ops_hub.analysis.schemas import AnalysisInput, StoredAnalysis
-from ai_ops_hub.config import Settings
+from ai_ops_hub.config import OFFICIAL_CLAUDE_BASE_URL, Settings
 from ai_ops_hub.db.engine import for_writes
 from ai_ops_hub.db.models import LlmCallRecord, MessageRecord
 from ai_ops_hub.db.repositories import (
@@ -69,6 +70,10 @@ log = logging.getLogger("ai_ops_hub.claude")
 ClaudeClientFactory = Callable[[str, float], object]
 
 IN_FLIGHT_WINDOW = timedelta(minutes=10)  # a reservation younger than this blocks an identical second request
+
+
+def _host(url: str) -> str:
+    return urlsplit(url).hostname or url
 
 
 class _AlreadyAnalyzed(Exception):
@@ -131,6 +136,8 @@ class ClaudeService:
             enabled=s.claude_enabled,
             key_configured=self._key is not None,
             model=s.claude_model,
+            endpoint_host=_host(s.claude_base_url),
+            custom_endpoint=s.claude_base_url != OFFICIAL_CLAUDE_BASE_URL,
             model_has_known_price=price is not None,
             input_usd_per_mtok=float(price.input_per_mtok) if price else None,
             output_usd_per_mtok=float(price.output_per_mtok) if price else None,
@@ -172,6 +179,8 @@ class ClaudeService:
             enabled=s.claude_enabled,
             key_configured=self._key is not None,
             model=s.claude_model,
+            endpoint_host=_host(s.claude_base_url),
+            custom_endpoint=s.claude_base_url != OFFICIAL_CLAUDE_BASE_URL,
             content_fingerprint=fingerprint,
             subject_chars=subject_chars,
             body_chars=body_chars,

@@ -25,6 +25,7 @@ from ai_ops_hub.analysis.claude.prompt import PROMPT_VERSION, SYSTEM_PROMPT, bui
 from ai_ops_hub.analysis.claude.schema import RESPONSE_SCHEMA, RawAnalysis
 from ai_ops_hub.analysis.claude.verify import VerificationStats, build_result
 from ai_ops_hub.analysis.schemas import AnalysisInput, AnalysisResult
+from ai_ops_hub.config import OFFICIAL_CLAUDE_BASE_URL
 from ai_ops_hub.errors import (
     ClaudeAuthError,
     ClaudeBadResponseError,
@@ -54,12 +55,16 @@ class CallInfo:
     rejection_reasons: tuple[str, ...]
 
 
-def make_client(api_key: str, timeout_seconds: float, http_client: Any = None) -> anthropic.Anthropic:
+def make_client(
+    api_key: str, timeout_seconds: float, base_url: str = OFFICIAL_CLAUDE_BASE_URL, http_client: Any = None
+) -> anthropic.Anthropic:
     """The only place a real client is built: no automatic retries, bounded time.
 
-    ``http_client`` exists so tests can run the REAL SDK over a mocked transport (no network)."""
+    ``base_url`` is ALWAYS passed explicitly: left to itself the SDK obeys the ANTHROPIC_BASE_URL environment variable
+    and would send the API key to whatever address that variable names. ``http_client`` exists so tests can run the
+    REAL SDK over a mocked transport (no network)."""
     extra = {} if http_client is None else {"http_client": http_client}
-    return anthropic.Anthropic(api_key=api_key, max_retries=0, timeout=timeout_seconds, **extra)
+    return anthropic.Anthropic(api_key=api_key, base_url=base_url, max_retries=0, timeout=timeout_seconds, **extra)
 
 
 class ClaudeAnalyzer:

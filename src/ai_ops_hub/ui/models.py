@@ -242,6 +242,8 @@ class ClaudeStatus(_M):
     enabled: bool
     key_configured: bool
     model: str
+    endpoint_host: str = "api.anthropic.com"
+    custom_endpoint: bool = False
     model_has_known_price: bool = False
     input_usd_per_mtok: float | None = None
     output_usd_per_mtok: float | None = None
@@ -262,6 +264,8 @@ class ClaudePreview(_M):
     enabled: bool
     key_configured: bool
     model: str
+    endpoint_host: str = "api.anthropic.com"
+    custom_endpoint: bool = False
     content_fingerprint: str
     will_send: list[str] = Field(default_factory=list)
     not_sent: list[str] = Field(default_factory=list)

@@ -62,22 +62,34 @@ def _error_text(exc: ClientError) -> str:
     return str(exc)
 
 
+def _blocked_pl(status: ClaudeStatus) -> str:
+    """Polish reason why the paid analysis is unavailable (the API's own texts are English)."""
+    if not status.enabled:
+        return "Analiza Claude jest wyłączona (ustawienie domyślne)."
+    if not status.key_configured:
+        return "Analiza Claude jest włączona, ale brakuje klucza API (zmienna `ANTHROPIC_API_KEY`)."
+    if not status.model_has_known_price:
+        return f"Model {esc(status.model)} nie ma znanej ceny, więc nie można oszacować kosztu."
+    return esc(status.blocked_reason or "Analiza Claude jest niedostępna.")
+
+
 def _status_panel(status: ClaudeStatus) -> None:
     with st.expander("Stan i limity Claude API", expanded=not status.can_analyze):
         if status.can_analyze:
             st.success("Analiza Claude jest włączona w konfiguracji. Nadal nic nie jest wysyłane bez Twojej zgody.")
         else:
-            st.info(esc(status.blocked_reason or "Analiza Claude jest wyłączona."))
+            st.info(_blocked_pl(status))
             st.markdown(
                 "Aby ją włączyć (opcjonalnie): ustaw zmienną `AIOPS_CLAUDE_ENABLED=true` i `ANTHROPIC_API_KEY` "
                 "w środowisku lub w ignorowanym przez Git pliku `.env`, a potem uruchom ponownie backend. "
-                "Szczegóły: README, rozdział Stage 7. Tryb offline (rule_based) działa zawsze."
+                "Szczegóły: README i docs/TECHNICAL_NOTES.md. Tryb offline (rule_based) działa zawsze."
             )
         c = st.columns([2, 1, 1, 1])
         c[0].metric("Model", status.model)
         c[1].metric("Limit na żądanie", money(status.max_cost_usd_per_request))
         c[2].metric("Budżet 24 h (lokalny)", money(status.daily_budget_usd))
         c[3].metric("Wydano 24 h (szac.)", money(status.spent_last_24h_usd))
+        st.caption(f"Adres API: {esc(status.endpoint_host)}" + (" (niestandardowy!)" if status.custom_endpoint else " (oficjalny)"))
         st.caption(COST_PL)
 
 
@@ -117,7 +129,12 @@ def _claude_section(client: ApiClient, status: ClaudeStatus, mid: int) -> None:
         c[1].metric("Wysyłane znaki", preview.subject_chars + preview.body_chars)
         c[2].metric("Szac. tokeny wejścia", preview.estimated_input_tokens)
         c[3].metric("Maks. koszt (szac.)", money(preview.estimated_max_cost_usd))
-        st.warning(f"**{PRIVACY_PL}** Nie są wysyłane: {NOT_SENT_PL}.")
+        st.warning(f"**{PRIVACY_PL}** Adres docelowy: `{esc(preview.endpoint_host)}`. Nie są wysyłane: {NOT_SENT_PL}.")
+        if preview.custom_endpoint:
+            st.error(
+                f"UWAGA: skonfigurowano niestandardowy adres API (`{esc(preview.endpoint_host)}`). Twój klucz API i treść "
+                "e-maila trafią tam, a nie do api.anthropic.com. Wysyłaj tylko, jeśli to zamierzone."
+            )
         st.caption(COST_PL)
         ticked = st.checkbox(
             f"Rozumiem, że treść e-maila zostanie wysłana do Anthropic i że to żądanie jest płatne "
