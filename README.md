@@ -199,9 +199,10 @@ tests/                 automated tests; tests/data/samples (fictional emails), t
 scripts/demo_api.py    scripted offline demonstration
 docs/                  DEMO_PL.md (Polish walkthrough), TECHNICAL_NOTES.md, SECURITY_REVIEW.md, RELEASE_CHECKLIST.md, images/
 .env.example           documented configuration (no secrets)
+LICENSE                MIT license
 ```
 
 ## License
 
-No license has been chosen yet, so by default all rights are reserved. See `docs/RELEASE_CHECKLIST.md` before making the
-repository public.
+[MIT](LICENSE), Copyright (c) 2026 Kacper Kolodziejczyk. The license covers the code, tests, documentation and fictional sample
+data written for this repository. Third-party dependencies keep their own licenses and are not redistributed here.

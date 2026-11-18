@@ -5,8 +5,7 @@ no remote is configured by this project's tooling and nothing has been pushed.
 
 ## 1. Decisions only the owner can make
 
-- [ ] **License (owner).** No `LICENSE` file exists, so the default is "all rights reserved". For a portfolio project the usual choices
-      are MIT or Apache-2.0 (permissive). Dependencies are permissive (MIT, BSD-3-Clause, Apache-2.0): pydantic, FastAPI, SQLModel,
+- [x] **License (owner).** MIT chosen: `LICENSE` added and declared in `pyproject.toml` and the README. Dependencies are permissive (MIT, BSD-3-Clause, Apache-2.0): pydantic, FastAPI, SQLModel,
       SQLAlchemy, openpyxl, anthropic (MIT), uvicorn, starlette, httpx2 (BSD-3-Clause), streamlit (Apache-2.0). Add the license text and
       a `license` field to `pyproject.toml`. Sample data is fictional and original to this repository.
 - [ ] **Git history and the employer-name string (owner).** An early commit contains a test with the name of a (former/current) employer
@@ -27,7 +26,7 @@ no remote is configured by this project's tooling and nothing has been pushed.
 - [ ] **Optional authorized live Claude test** (the only way to remove the "never called for real" caveat): see the procedure in
       `docs/TECHNICAL_NOTES.md` (Stage 7). Set an Anthropic billing limit first; use one fictional email and the Haiku model. After it,
       update the README sentence "never been called for real" to describe what was actually observed (model, date, cost).
-- [x] `pytest` advisory (dev-only, flagged in 8.4.2): the `dev` extra now allows `pytest>=8,<10`; the suite passes with 9.0.3.
+- [x] `pytest` advisory (dev-only, flagged in 8.4.2): the `dev` extra now requires `pytest>=9.0.3,<10`.
 
 ## 3. Repository hygiene (checked in Stage 8)
 

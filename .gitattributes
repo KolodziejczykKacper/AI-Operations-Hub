@@ -1,0 +1,4 @@
+# Sample emails are test fixtures: keep their bytes exactly as committed (no CRLF conversion on Windows).
+*.eml -text
+*.png binary
+*.xlsx binary
