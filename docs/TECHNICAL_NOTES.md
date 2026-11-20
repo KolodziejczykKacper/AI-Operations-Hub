@@ -342,7 +342,8 @@ shapes the HTTP response.
 * Values are exactly as the API stores them (`12500.00 PLN`, `2026-12-15`); no locale-specific
   currency formats. Opening in Excel depends on its locale for the decimal separator.
 * Tested with `openpyxl` and (manually) the Streamlit UI; the file was not opened in Microsoft Excel itself
-  in the automated tests.
+  in the automated tests. Separately, the repository owner opened one generated export in Microsoft Excel by hand and confirmed
+  that it displays correctly (see the README).
 
 ## Stage 7: optional Claude API analysis
 

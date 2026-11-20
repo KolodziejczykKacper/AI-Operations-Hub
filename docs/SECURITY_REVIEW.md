@@ -51,5 +51,5 @@ authentication**, by design for this demo.
 ## Not covered
 
 No authentication/authorisation, no encryption at rest, no rate limiting beyond local guards, no dependency pinning with hashes, no
-fuzzing of the e-mail parsers beyond the included samples, no test against the **real** Anthropic API, no test in Microsoft Excel
-itself, no accessibility review of the UI.
+fuzzing of the e-mail parsers beyond the included samples, no test against the **real** Anthropic API, no automated test in
+Microsoft Excel (the owner made one manual check that an export displays correctly; see the README), no accessibility review of the UI.
